@@ -109,7 +109,7 @@ def pprint( s ):
 
 
 
-def lambda_to_kernel( lmb ):
+def lambda_to_kernel( lmb, types ):
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -128,9 +128,11 @@ def lambda_to_kernel( lmb ):
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup)
 
-    input_sig = ', '.join("__global const float *"+aname for aname in argnames )
+    input_sig = ', '.join("__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames))
 
     kernel = """
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+
 __kernel void sum( %(sig)s, __global float *res_g) {
   int gid = get_global_id(0);
   res_g[gid] = %(body)s;

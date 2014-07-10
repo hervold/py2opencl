@@ -11,9 +11,15 @@ from . import F
 def main():
 
     lmb = lambda x: -x if x < 0.5 else F.sin(x)
-    a = Py2OpenCL( lmb )
+    #arr = (1000 * np.random.rand(1000)).astype(np.int32)
+    arr = np.random.rand(1000).astype(np.float32)
 
-    s = Py2OpenCL( lambda x: x ).map( np.random.rand(1000).astype(np.float32) )
+    before = time.time()
+    a = Py2OpenCL( lmb ).map( arr )
+    print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
+    b = lmb( arr )
+    print a - b
+    return
 
     for n in (100, 10000, 1000000, 10000000):
         rnd = np.random.rand(n).astype(np.float32)

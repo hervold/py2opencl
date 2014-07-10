@@ -20,22 +20,35 @@ class Py2OpenCL(object):
         self.ctx = cl.create_some_context()
         self.queue = cl.CommandQueue(self.ctx)
 
-        self.argnames, self.kernel = lambda_to_kernel( lmb )
-
-        # compile openCL
-        self.prog = cl.Program(self.ctx, self.kernel).build()
+        self.lmb = lmb
 
     def map(self, *arrays ):
-        assert self.argnames and len(self.argnames) == len(arrays)
+        """
+        verify types and number of numpy arrays, then compile kernel.
 
-        length = None
+        note that kernel can't be generated until we know the types involved.
+        """
+        length, types = None, []
         for a in arrays:
-            assert a.dtype in (np.dtype('float16'), np.dtype('float32'), np.dtype('float64'))
+            if a.dtype in (np.dtype('float16'), np.dtype('float32'), np.dtype('float64')):
+                types.append('float')
+            elif a.dtype in (np.dtype('int16'), np.dtype('int32'), np.dtype('int64')):
+                types.append('int')
+            else:
+                raise ValueError("invalid numpy type: "+str(a.dtype))
+
             if length is None:
                 length = len(a)
             else:
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
+
+        self.argnames, self.kernel = lambda_to_kernel( self.lmb, types )
+        assert self.argnames and len(self.argnames) == len(arrays)
+
+        # compile openCL
+        self.prog = cl.Program(self.ctx, self.kernel).build()
+
 
         mf = cl.mem_flags
         buffs, nbytes = [], arrays[0].nbytes

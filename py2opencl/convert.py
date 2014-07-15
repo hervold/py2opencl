@@ -38,7 +38,7 @@ def conv( el, symbol_lookup=None ):
         if iden == 'True' or iden == 'False':
             return iden.lower()
         if symbol_lookup is not None:
-            return symbol_lookup(iden)
+            return symbol_lookup(iden)[1]
         return '{{' + iden + '}}'
 
     if name == 'Num':
@@ -96,8 +96,13 @@ def conv( el, symbol_lookup=None ):
 
     if name == 'Call':
         [funcname] = el.findall('./func')
+        [module] = funcname.findall('./value')
+        module = module.get('id')
+        
         funcname = funcname.get('attr')
         args = el.findall('./args/_list_element')
+        print "-- module: %s, funcname: %s, args: %s" % (module, funcname, map(_conv,args))
+        # FIXME: problem here is that args could easily be a more complex expression ...
         return '%s( %s )' % (funcname, ', '.join( _conv(a) for a in args ))
 
 
@@ -120,9 +125,11 @@ def lambda_to_kernel( lmb, types ):
     argnames = [a.get('id') for a in args]
     assert argnames
 
+    argname_to_type = dict( zip( argnames, types ) )
+
     def symbol_lookup( s ):
-        if s in argnames:
-            return s + '[gid]'
+        if s in argname_to_type:
+            return argname_to_type[s], (s + '[gid]')
         raise ValueError('symbol not found: %s' % str(s))
 
     [body] = func.findall("./body")

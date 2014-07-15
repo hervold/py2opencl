@@ -12,13 +12,23 @@ def main():
 
     lmb = lambda x: -x if x < 0.5 else F.sin(x)
     #arr = (1000 * np.random.rand(1000)).astype(np.int32)
-    arr = np.random.rand(1000).astype(np.float32)
+    arr = np.random.rand(10000000).astype(np.float32)
 
     before = time.time()
     a = Py2OpenCL( lmb ).map( arr )
     print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
-    b = lmb( arr )
-    print a - b
+    # b = lmb( arr )  # conditionals don't work this way in Numpy
+    before = time.time()
+    b = np.where( arr < 0.5, -arr, np.sin(arr) )
+    print "sine - numpy: for %d elements, took" % len(a), time.time() - before
+    #print a - b
+
+    before = time.time()
+    a = Py2OpenCL( lambda x: F.atanpi(x) ).map( arr )
+    print "arctan(x) / pi - openCL: for %d elements, took" % len(a), time.time() - before
+    before = time.time()
+    b = (lambda x: F.atanpi(x) / np.pi)( arr )
+    print "arctan(x) / pi - numpy: for %d elements, took" % len(a), time.time() - before
     return
 
     for n in (100, 10000, 1000000, 10000000):

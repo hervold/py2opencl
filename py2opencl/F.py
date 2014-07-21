@@ -8,6 +8,8 @@ __func = lambda x: x
 __func2 = lambda x, y: x
 __func3 = lambda x, y, z: remquo
 
+
+
 acos = numpy.arccos
 acosh = numpy.arccosh
 acospi = lambda x: numpy.arccos(x) / numpy.pi
@@ -77,3 +79,16 @@ tanh = numpy.tanh
 tanpi = lambda x: numpy.tan( numpy.pi * x )
 tgamma = scipy.special.gamma
 trunc = numpy.trunc
+
+
+__floats = set( (numpy.dtype('float16'), numpy.dtype('float32'), numpy.dtype('float64')) )
+
+'''
+## annotate argument types & return type
+import inspect
+__varnames = locals().keys()
+for k in __varnames:
+    if not 'k'.startswith('_') and type( locals()[k] == type(acos) ):
+        locals()[k].argtypes = [__floats for _ in inspect.getargspec( locals()[k] )[0]]
+        locals()[k].rettype = __floats
+'''

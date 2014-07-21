@@ -10,6 +10,13 @@ from . import ast2xml
 import xml.etree.ElementTree as ET
 
 
+def special_funcs( module, funcname, symbol_lookup, args ):
+    if not module and funcname == 'int':
+        # FIXME: should we check the type of args?
+        return 'convert_int4_rtz'
+    return funcname
+
+
 def conv( el, symbol_lookup=None ):
     def _conv( el ):
         return conv( el, symbol_lookup )
@@ -96,14 +103,19 @@ def conv( el, symbol_lookup=None ):
 
     if name == 'Call':
         [funcname] = el.findall('./func')
-        [module] = funcname.findall('./value')
-        module = module.get('id')
-        
-        funcname = funcname.get('attr')
-        args = el.findall('./args/_list_element')
-        print "-- module: %s, funcname: %s, args: %s" % (module, funcname, map(_conv,args))
+        module = funcname.findall('./value')
+        if module:
+            [module] = module
+            module = module.get('id')
+
+        funcname = funcname.get('attr') if funcname.get('attr') else funcname.get('id')
+
+        args = map( _conv, el.findall('./args/_list_element') )
+        funcname = special_funcs( module, funcname,  symbol_lookup, args )
+
+        #print "-- module: %s, funcname: %s, args: %s" % (module, funcname, args)
         # FIXME: problem here is that args could easily be a more complex expression ...
-        return '%s( %s )' % (funcname, ', '.join( _conv(a) for a in args ))
+        return '%s( %s )' % (funcname, ', '.join(args))
 
 
 import xml.dom.minidom

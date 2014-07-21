@@ -10,9 +10,13 @@ from .. import F
 
 def main():
 
+    
+
     lmb = lambda x: -x if x < 0.5 else F.sin(x)
     #arr = (1000 * np.random.rand(1000)).astype(np.int32)
     arr = np.random.rand(10000000).astype(np.float32)
+
+    Py2OpenCL( lambda x: int(x) ).map( arr )
 
     before = time.time()
     a = Py2OpenCL( lmb ).map( arr )

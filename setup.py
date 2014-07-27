@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='py2opencl',
-    version='0.1.0',
+    version='0.1.1',
     author='kieran hervold',
     author_email='hervold@gmail.com',
     packages=['py2opencl', 'py2opencl.test'],

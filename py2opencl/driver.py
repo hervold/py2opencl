@@ -10,7 +10,7 @@ from .convert import lambda_to_kernel
 
 class Py2OpenCL(object):
     argnames = None
-    kernel = None
+    _kernel = None
     ctx = None
     queue = None
     prog = None
@@ -21,6 +21,10 @@ class Py2OpenCL(object):
         self.queue = cl.CommandQueue(self.ctx)
 
         self.lmb = lmb
+
+    @property
+    def kernel(self):
+        return lambda_to_kernel( self.lmb, None )[1]
 
     def map(self, *arrays ):
         """
@@ -43,11 +47,11 @@ class Py2OpenCL(object):
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
 
-        self.argnames, self.kernel = lambda_to_kernel( self.lmb, types )
+        self.argnames, self._kernel = lambda_to_kernel( self.lmb, types )
         assert self.argnames and len(self.argnames) == len(arrays)
 
         # compile openCL
-        self.prog = cl.Program(self.ctx, self.kernel).build()
+        self.prog = cl.Program(self.ctx, self._kernel).build()
 
 
         mf = cl.mem_flags

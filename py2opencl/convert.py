@@ -141,17 +141,21 @@ def lambda_to_kernel( lmb, types ):
     argnames = [a.get('id') for a in args]
     assert argnames
 
-    argname_to_type = dict( zip( argnames, types ) )
+    argname_to_type = dict( zip( argnames, types ) ) if types else None
 
     def symbol_lookup( s ):
-        if s in argname_to_type:
-            return argname_to_type[s], (s + '[gid]')
-        raise ValueError('symbol not found: %s' % str(s))
+        if argname_to_type:
+            if s in argname_to_type:
+                return argname_to_type[s], (s + '[gid]')
+            raise ValueError('symbol not found: %s' % str(s))
+        return None, (s + '[gid]')
 
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup)
 
-    input_sig = ', '.join("__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames))
+    input_sig = ', '.join("__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)) \
+                if types \
+                   else ', '.join("__global const float *%s" % aname for aname in argnames)
 
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable

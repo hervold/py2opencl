@@ -12,3 +12,5 @@ except DistributionNotFound:
     __version__ = 'Please install this project with setup.py'
 else:
     __version__ = _dist.version
+
+from .driver import Py2OpenCL

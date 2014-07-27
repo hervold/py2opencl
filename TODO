@@ -1,6 +1,5 @@
 FIXME: add type-checking for built-in functions
 
-Add support for ints
-
 Add support for built-in Math Functions; see http://www.khronos.org/files/opencl-quick-reference-card.pdf
 
+Expand beyond lambdas in order to support, eg, this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/

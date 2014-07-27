@@ -13,3 +13,11 @@ Python lambdas containing only simple mathematical operations and built-in
 OpenCL functions.
 
 
+Example
+=======
+
+The following code returns a new numpy array holding the results of the computation::
+
+    a = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x) ) \
+        .map( np.random.rand(10000000).astype(np.float32 )
+

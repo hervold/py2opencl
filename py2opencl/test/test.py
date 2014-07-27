@@ -16,7 +16,9 @@ def main():
     #arr = (1000 * np.random.rand(1000)).astype(np.int32)
     arr = np.random.rand(10000000).astype(np.float32)
 
-    Py2OpenCL( lambda x: int(x) ).map( arr )
+    print '-- float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
+
+    print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
     before = time.time()
     a = Py2OpenCL( lmb ).map( arr )

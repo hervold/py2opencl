@@ -13,7 +13,11 @@ import xml.etree.ElementTree as ET
 def special_funcs( module, funcname, symbol_lookup, args ):
     if not module and funcname == 'int':
         # FIXME: should we check the type of args?
-        return 'convert_int4_rtz'
+        #return 'convert_int4_rtz'
+        return 'convert_int_rtz'
+    if not module and funcname == 'float':
+        #return 'convert_float4_rtz'
+        return 'convert_float_rtz'
     return funcname
 
 

@@ -8,7 +8,7 @@ import ast
 import inspect
 from . import ast2xml
 import xml.etree.ElementTree as ET
-
+import re
 
 def special_funcs( module, funcname, symbol_lookup, args ):
     if not module and funcname == 'int':
@@ -49,7 +49,7 @@ def conv( el, symbol_lookup=None ):
         if iden == 'True' or iden == 'False':
             return iden.lower()
         if symbol_lookup is not None:
-            return symbol_lookup(iden)[1]
+            return symbol_lookup(iden)[2]
         return '{{' + iden + '}}'
 
     if name == 'Num':
@@ -124,12 +124,17 @@ def conv( el, symbol_lookup=None ):
         [target] = el.findall('./targets/_list_element')
         target = _conv(target) # eg, 'x' .get('id')
 
-        
         [operand] =  el.findall('./value')
         operand = _conv(operand)
 
-        typ = 'float';
-        return '%s %s = %s;' % (typ, target, operand)
+        # hackiness here:
+        assert symbol_lookup
+        target_name = re.match( r'(\w+)\[?', target ).group(1)
+        print "-- assign: target_name=%s -> %s" % (target_name, symbol_lookup( target_name )[0])
+        if symbol_lookup( target_name )[0]:
+            typ = 'float'
+            return '%s %s = %s;' % (typ, target, operand)
+        return '%s = %s;' % (target, operand)
 
     if name == 'Subscript':
         [name] = el.findall('./value')
@@ -167,11 +172,12 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     argname_to_type = dict( zip( argnames, types ) ) if types else None
 
     def symbol_lookup( s ):
+        # returns: requires_declaration, type, string_representation
         if argname_to_type:
             if s in argname_to_type:
-                return argname_to_type[s], (s + '[gid]')
+                return False, argname_to_type[s], (s + '[gid]')
             raise ValueError('symbol not found: %s' % str(s))
-        return None, (s + '[gid]')
+        return False, None, (s + '[gid]')
 
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup)
@@ -206,27 +212,28 @@ def function_to_kernel( f, types, bindings=None ):
     idx_name = argnames.pop(0)
     results_name = argnames.pop(0)
 
-    argname_to_type = dict( zip( argnames, types ) ) if types else None
+    argname_to_type = dict( zip( argnames, types ) ) if types \
+                      else dict( (a, None) for a in argnames )
 
     def symbol_lookup( s ):
-        if s == idx_name:
-            return None, 'gid'
+        print "-- symbol_lookup( %s ), idx_name=%s, results_name=%s" % (s,idx_name,results_name)
+        # returns: requires_declaration, type, string_representation
+        if s == idx_name or s == 'gid':
+            return False, None, 'gid'
 
-        if s == results_name:
-            return None, 'res_g'
+        if s == results_name or s == 'res_g':
+            return False, None, 'res_g'
 
+        print "-- s=%s, argname_to_type=%s, bindings=%s" % (s, argname_to_type, bindings)
         if argname_to_type:
             if s in argname_to_type:
-                return argname_to_type[s], s
-            if not bindings:
-                # undefined otherwise
-                raise ValueError('symbol not found: %s' % str(s))
+                return False, argname_to_type[s], s
 
         if bindings:
             if s in bindings:
-                return type(bindings[s]), str(bindings[s])
+                return False, type(bindings[s]), str(bindings[s])
 
-        return None, s
+        return True, None, s
 
     assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
 
@@ -234,8 +241,8 @@ def function_to_kernel( f, types, bindings=None ):
     kernel_body = conv(body, symbol_lookup=symbol_lookup)
 
     sigs = ['__global float *res_g']
-    sigs += ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
-            if types else ["__global const float *%s" % aname for aname in argnames]
+    sigs.extend( ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+                 if types else ["__global const float *%s" % aname for aname in argnames] )
 
     input_sig =  ', '.join(sigs)
 
@@ -247,6 +254,7 @@ __kernel void sum( %(sig)s ) {
   %(body)s
 }""" % {'sig': input_sig, 'body': '\n  '.join(assignments)}
 
+    print kernel
 
     return (argnames, kernel)
 

@@ -12,13 +12,14 @@ from .. import F
 def main():
 
     C = 10
-    def f(i, x):
-        y = x[1] + 1
-        x[i] = F.sin(y) + C
+    def f(i, x, y):
+        # @i - index; @x - results
+        z = F.sin( y[i] )
+        x[i] = z + C
 
     arr = np.random.rand(10000000).astype(np.float32)
 
-    Py2OpenCL( f, bindings={'C': 10} )
+    Py2OpenCL( f, bindings={'C': 10} ).map( arr )
 
 
     lmb = lambda x: -x if x < 0.5 else F.sin(x)

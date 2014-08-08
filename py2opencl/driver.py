@@ -14,18 +14,19 @@ class Py2OpenCL(object):
     ctx = None
     queue = None
     prog = None
+    bindings = None
     def __init__(self, lmb, context=None, bindings=None):
         """
         """
         self.ctx = context if context \
                    else cl.create_some_context()
         self.queue = cl.CommandQueue(self.ctx)
-
+        self.bindings = bindings
         self.lmb = lmb
 
     @property
     def kernel(self):
-        return lambda_to_kernel( self.lmb, None )[1]
+        return lambda_to_kernel( self.lmb, None, bindings=self.bindings )[1]
 
     def map(self, *arrays ):
         """
@@ -48,7 +49,7 @@ class Py2OpenCL(object):
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
 
-        self.argnames, self._kernel = lambda_to_kernel( self.lmb, types )
+        self.argnames, self._kernel = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
         assert self.argnames and len(self.argnames) == len(arrays)
 
         # compile openCL

@@ -14,10 +14,11 @@ class Py2OpenCL(object):
     ctx = None
     queue = None
     prog = None
-    def __init__(self, lmb):
+    def __init__(self, lmb, context=None, bindings=None):
         """
         """
-        self.ctx = cl.create_some_context()
+        self.ctx = context if context \
+                   else cl.create_some_context()
         self.queue = cl.CommandQueue(self.ctx)
 
         self.lmb = lmb

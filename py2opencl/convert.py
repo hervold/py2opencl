@@ -117,10 +117,30 @@ def conv( el, symbol_lookup=None ):
         args = map( _conv, el.findall('./args/_list_element') )
         funcname = special_funcs( module, funcname,  symbol_lookup, args )
 
-        #print "-- module: %s, funcname: %s, args: %s" % (module, funcname, args)
         # FIXME: problem here is that args could easily be a more complex expression ...
         return '%s( %s )' % (funcname, ', '.join(args))
 
+    if name == 'Assign':
+        [target] = el.findall('./targets/_list_element')
+        target = _conv(target) # eg, 'x' .get('id')
+
+        
+        [operand] =  el.findall('./value')
+        operand = _conv(operand)
+
+        typ = 'float';
+        return '%s %s = %s;' % (typ, target, operand)
+
+    if name == 'Subscript':
+        [name] = el.findall('./value')
+        [subscr] = el.findall('./slice')
+        return '%s[%s]' % (_conv(name), _conv(subscr))
+
+    if name == 'Index':
+        [val] = el.findall('./value')
+        return _conv(val)
+
+    print "??", pprint(el)
 
 import xml.dom.minidom
 def pprint( s ):
@@ -130,12 +150,15 @@ def pprint( s ):
 
 
 
-def lambda_to_kernel( lmb, types ):
+def lambda_to_kernel( lmb, types, bindings=None ):
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
-    [func] = root.findall(".//*[@_name='Lambda']")
 
+    if not root.findall(".//*[@_name='Lambda']"):
+        return function_to_kernel( lmb, types, bindings )
+
+    [func] = root.findall(".//*[@_name='Lambda']")
     # argnames are used to (1) determine order of input matrices, and (2) enforce namespace
     args = func.findall("args/args/_list_element[@id]")
     argnames = [a.get('id') for a in args]
@@ -163,8 +186,67 @@ def lambda_to_kernel( lmb, types ):
 __kernel void sum( %(sig)s, __global float *res_g) {
   int gid = get_global_id(0);
   res_g[gid] = %(body)s;
-}
-""" % {'sig': input_sig, 'body': kernel_body}
+}""" % {'sig': input_sig, 'body': kernel_body}
+
+    return (argnames, kernel)
+
+
+
+def function_to_kernel( f, types, bindings=None ):
+    #####
+    # not a lambda, but a traditional function
+    # lstrip, b/c there's likely whitespace that WILL get parsed
+    src = ast.parse( inspect.getsource( f ).lstrip() )
+    root = ET.fromstring( ast2xml.ast2xml().convert(src) )
+
+    [func] = root.findall(".//*[@_name='FunctionDef']")
+    argnames = [x.get('id') for x in
+                func.findall("./args[@_name='arguments']/args/_list_element[@_name='Name']")]
+    assert len(argnames) > 1
+    idx_name = argnames.pop(0)
+    results_name = argnames.pop(0)
+
+    argname_to_type = dict( zip( argnames, types ) ) if types else None
+
+    def symbol_lookup( s ):
+        if s == idx_name:
+            return None, 'gid'
+
+        if s == results_name:
+            return None, 'res_g'
+
+        if argname_to_type:
+            if s in argname_to_type:
+                return argname_to_type[s], s
+            if not bindings:
+                # undefined otherwise
+                raise ValueError('symbol not found: %s' % str(s))
+
+        if bindings:
+            if s in bindings:
+                return type(bindings[s]), str(bindings[s])
+
+        return None, s
+
+    assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
+
+    [body] = func.findall("./body")
+    kernel_body = conv(body, symbol_lookup=symbol_lookup)
+
+    sigs = ['__global float *res_g']
+    sigs += ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+            if types else ["__global const float *%s" % aname for aname in argnames]
+
+    input_sig =  ', '.join(sigs)
+
+    kernel = """
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+
+__kernel void sum( %(sig)s ) {
+  int gid = get_global_id(0);
+  %(body)s
+}""" % {'sig': input_sig, 'body': '\n  '.join(assignments)}
+
 
     return (argnames, kernel)
 

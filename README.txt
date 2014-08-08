@@ -44,3 +44,12 @@ found `here http://developer.amd.com/tools-and-sdks/opencl-zone/opencl-tools-sdk
 (as of 26 Jul 2014).  It supports modern Intel CPU's, no GPU required.  (Presumably it supports AMD CPUs as well.)
 
 As of this writing, Intel's beignet driver appears to be broken on Ubuntu 14.04.
+
+
+TODO
+====
+
+def avg_image( i, data ):
+    # assume data is a monochrome image for simplicity's sake
+    ret = Py2OpenCL.result()
+    ret[i] = 

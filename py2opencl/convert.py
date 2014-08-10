@@ -21,9 +21,9 @@ def special_funcs( module, funcname, symbol_lookup, args ):
     return funcname
 
 
-def conv( el, symbol_lookup=None ):
+def conv( el, symbol_lookup=None, declarations=None ):
     def _conv( el ):
-        return conv( el, symbol_lookup )
+        return conv( el, symbol_lookup,  declarations)
 
     def cpow( left_el, right_el ):
 	return "pow( %s, %s )" % (_conv(left_el), _conv(right_el))
@@ -147,8 +147,8 @@ def conv( el, symbol_lookup=None ):
         target_name = re.match( r'(\w+)\[?', target ).group(1)
         print "-- assign: target_name=%s -> %s" % (target_name, symbol_lookup( target_name )[0])
         if symbol_lookup( target_name )[0]:
-            typ = 'float'
-            return '%s %s = %s;' % (typ, target, operand)
+            declarations[ target ] = 'float'
+            return '%s = %s;' % (target, operand)
         return '%s = %s;' % (target, operand)
 
     if name == 'Subscript':
@@ -252,26 +252,29 @@ def function_to_kernel( f, types, bindings=None ):
 
     # FIXME: this doesn't cover if/then, for, while ...
     [funcbod] = func.findall('./body')
-    assignments = [conv(el, symbol_lookup=symbol_lookup) for el in funcbod.getchildren()]
+    declarations = {}
+    assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
 
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
 
     [body] = func.findall("./body")
-    kernel_body = conv(body, symbol_lookup=symbol_lookup)
+    kernel_body = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     sigs = ['__global float *res_g']
     sigs.extend( ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
                  if types else ["__global const float *%s" % aname for aname in argnames] )
 
     input_sig =  ', '.join(sigs)
+    decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
 
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 __kernel void sum( %(sig)s ) {
+  %(decl)s
   int gid = get_global_id(0);
   %(body)s
-}""" % {'sig': input_sig, 'body': '\n  '.join(assignments)}
+}""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
     print kernel
 

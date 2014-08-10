@@ -1,6 +1,7 @@
 Expand beyond lambdas in order to support, eg,
 this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/
   - basic conversion seems to work
+  - BUT: if/then, for and while loops?
   - types aren't supported yet -- everything defaults to float.
     some minimal type inference is needed
   - closures are currently supported via a @bindings parameter b/c

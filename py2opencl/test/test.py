@@ -14,7 +14,10 @@ def main():
     C = 10
     def f(i, x, y):
         # @i - index; @x - results
-        z = F.sin( y[i] )
+        if i < 244:
+            z = F.sin( y[i] )
+        else:
+            z = 1
         x[i] = z + C
 
     arr = np.random.rand(10000000).astype(np.float32)

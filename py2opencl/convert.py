@@ -84,6 +84,21 @@ def conv( el, symbol_lookup=None ):
 
 	return '(%s %s %s)' % (_conv(left), cop, _conv(right))
 
+    if name == 'If':
+        print '>>>', el.tag
+        [test] = el.findall('./test')
+        [body] = el.findall('./body')
+        body = ';\n'.join( _conv(x) for x in body.findall('./_list_element') )
+        ret = """if( %s ) {
+%s
+}""" % (_conv(test), body)
+
+        if el.findall('./orelse'):
+            [orelse] = el.findall('./orelse')
+            orelse = ';\n'.join( _conv(x) for x in orelse.findall('./_list_element') )
+            ret += " else { %s }" % orelse
+        return ret
+
     if name == 'IfExp':
 	[test] = el.findall('./test')
         [iftrue] = el.findall('./body')
@@ -235,7 +250,11 @@ def function_to_kernel( f, types, bindings=None ):
 
         return True, None, s
 
-    assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
+    # FIXME: this doesn't cover if/then, for, while ...
+    [funcbod] = func.findall('./body')
+    assignments = [conv(el, symbol_lookup=symbol_lookup) for el in funcbod.getchildren()]
+
+    #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
 
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup)
@@ -261,24 +280,12 @@ __kernel void sum( %(sig)s ) {
 
 
 """
-params:
-  ast.arguments object:  x.args[0].id -> 'x'
 
-2 * x -> BinOp:{op=ast.Mult, left=ast.Num, right=ast.Name->right.id='x'}
+x = Py2OpenCL( lambda x: x + 1 ).map( numpy.array(...) )
 
+# .bind used for type inference
+print Py2OpenCL( lambda x: x + 1 ).bind( numpy.array(...) ).kernel
 
-a = numpy.array(...)
-b = numpy.array(...)
+x = Py2OpenCL( lambda x: x + 1 ).bind( numpy.array(...) ).apply()
 
-# simple N-len, N-len -> N-len
-OpenCL.apply( lambda a, b: a+b ) \
-      .zip( OpenCL.zip(a,b) )
-- OR -
-# more complex: range(i)
-c = numpy.array(...)
-
-OpenCL.apply( lambda i, a, b: (i/2, a[i] + b[i/2]) ) \
-      .torange( len(a) ) \
-      .into( c ) \
-      .using( a, b )
 """

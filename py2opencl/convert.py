@@ -147,7 +147,7 @@ def conv( el, symbol_lookup=None, declarations=None ):
         target_name = re.match( r'(\w+)\[?', target ).group(1)
         print "-- assign: target_name=%s -> %s" % (target_name, symbol_lookup( target_name )[0])
         if symbol_lookup( target_name )[0]:
-            declarations[ target ] = 'float'
+            declarations[ target ] = 'int'
             return '%s = %s;' % (target, operand)
         return '%s = %s;' % (target, operand)
 
@@ -160,7 +160,12 @@ def conv( el, symbol_lookup=None, declarations=None ):
         [val] = el.findall('./value')
         return _conv(val)
 
+    if name == 'Expr':
+        # we can safely ignore these?  random strings (such as docstrings) come back as Expressions
+        return ''
+
     print "??", pprint(el)
+    print "????"
 
 import xml.dom.minidom
 def pprint( s ):
@@ -253,6 +258,7 @@ def function_to_kernel( f, types, bindings=None ):
     # FIXME: this doesn't cover if/then, for, while ...
     [funcbod] = func.findall('./body')
     declarations = {}
+    print "-- pre-assign:", list(funcbod.getchildren())
     assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
 
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
@@ -260,13 +266,14 @@ def function_to_kernel( f, types, bindings=None ):
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
-    sigs = ['__global float *res_g']
+    sigs = ['__global int *res_g']
     sigs.extend( ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
                  if types else ["__global const float *%s" % aname for aname in argnames] )
 
     input_sig =  ', '.join(sigs)
     decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
 
+    print "-- assignments:", assignments
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 

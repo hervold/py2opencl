@@ -1,8 +1,14 @@
-Expand beyond lambdas in order to support, eg,
-this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/
-  - basic conversion seems to work
-  - BUT: if/then, for and while loops?
-  - types aren't supported yet -- everything defaults to float.
-    some minimal type inference is needed
-  - closures are currently supported via a @bindings parameter b/c
-    the namespace of the function isn't accessible via inspect()
+ - test on various drivers (AMD, Nvidia, Intel)
+ - where > 1 driver exists, persist choice
+ - Expand beyond lambdas in order to support, eg,
+   this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/
+    + basic conversion seems to work
+    + if/then
+    + for and while loops
+    + possibly unfixable: python short-circuit and/or, eg, x = foo or 10
+      this is syntactically correct in C, but won't work as expected
+    + types aren't supported yet -- everything defaults to float.
+      some minimal type inference is needed
+    + closures are currently supported via a @bindings parameter b/c
+      the namespace of the function isn't accessible via inspect()
+      this is probably unfixable

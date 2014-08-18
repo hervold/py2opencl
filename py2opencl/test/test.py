@@ -4,18 +4,69 @@ simple test of py2opencl
 
 import numpy as np
 import time
+import os.path
+import Image
+
 from ..driver import Py2OpenCL
 from ..convert import lambda_to_kernel
 from .. import F
 
+from . import __file__ as test_directory
+
+
+def avg_img( src_path, dest_path ):
+    """
+    load an image and set each pixel to the avg of its cardinal neighbors
+    """
+    # see http://stackoverflow.com/questions/15612373/convert-image-png-to-matrix-and-then-to-1d-array
+    img = Image.open( src_path ).convert('RGB') # 3 uint8's per pixel
+    img_arr = np.array(img)
+    rows, cols, depth = img_arr.shape
+    flat_arr = img_arr.ravel()
+    rowcount = cols * depth   # of cells per row
+    totpix = len(flat_arr)
+
+    def avg( i, dest, img ):
+        """
+        in order to enforce wrap-around, we'll take mod of each coord
+        """
+        right = (i + depth) % totpix
+        left = (i - depth) % totpix
+        up = (i - rowcount) % totpix
+        down = (i + rowcount) % totpix
+        dest[i] = (right + left + up + down) / 4
+
+    print "--", rows, cols, depth
+    avg_img = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
+    '''
+    avg_img = np.empty_like(flat_arr)
+    for i in range(len(flat_arr)):
+        avg( i, avg_img, flat_arr )
+    '''
+    print "-- a"
+
+    avg_img = avg_img.reshape( (rows, cols, depth) )
+    print "-- b", avg_img.shape
+    x = Image.fromarray( avg_img, 'RGB')#.save( dest_path )
+
+    print "-- c"
+    x.save( dest_path )
+
+
 
 def main():
+
+    img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
+    avg_img( img_path, '/tmp/foo.png')
+
+    import sys
+    sys.exit(0)
 
     C = 10
     def f(i, x, y):
         # @i - index; @x - results
         if i < 244:
-            z = F.sin( y[i] )
+            z = F.sin( y[i] ) or -1
         else:
             z = 1
         x[i] = z + C

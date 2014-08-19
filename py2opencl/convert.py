@@ -147,7 +147,7 @@ def conv( el, symbol_lookup=None, declarations=None ):
         target_name = re.match( r'(\w+)\[?', target ).group(1)
         print "-- assign: target_name=%s -> %s" % (target_name, symbol_lookup( target_name )[0])
         if symbol_lookup( target_name )[0]:
-            declarations[ target ] = 'int'
+            declarations[ target ] = 'uchar'
             return '%s = %s;' % (target, operand)
         return '%s = %s;' % (target, operand)
 
@@ -266,7 +266,7 @@ def function_to_kernel( f, types, bindings=None ):
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
-    sigs = ['__global int *res_g']
+    sigs = ['__global uchar *res_g']
     sigs.extend( ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
                  if types else ["__global const float *%s" % aname for aname in argnames] )
 

@@ -85,7 +85,6 @@ def conv( el, symbol_lookup=None, declarations=None ):
 	return '(%s %s %s)' % (_conv(left), cop, _conv(right))
 
     if name == 'If':
-        print '>>>', el.tag
         [test] = el.findall('./test')
         [body] = el.findall('./body')
         body = ';\n'.join( _conv(x) for x in body.findall('./_list_element') )
@@ -145,7 +144,6 @@ def conv( el, symbol_lookup=None, declarations=None ):
         # hackiness here:
         assert symbol_lookup
         target_name = re.match( r'(\w+)\[?', target ).group(1)
-        print "-- assign: target_name=%s -> %s" % (target_name, symbol_lookup( target_name )[0])
         if symbol_lookup( target_name )[0]:
             declarations[ target ] = 'uchar'
             return '%s = %s;' % (target, operand)
@@ -164,8 +162,6 @@ def conv( el, symbol_lookup=None, declarations=None ):
         # we can safely ignore these?  random strings (such as docstrings) come back as Expressions
         return ''
 
-    print "??", pprint(el)
-    print "????"
 
 import xml.dom.minidom
 def pprint( s ):
@@ -209,7 +205,7 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
-__kernel void sum( %(sig)s, __global float *res_g) {
+__kernel void sum( %(sig)s, __global uchar *res_g) {
   int gid = get_global_id(0);
   res_g[gid] = %(body)s;
 }""" % {'sig': input_sig, 'body': kernel_body}
@@ -236,7 +232,6 @@ def function_to_kernel( f, types, bindings=None ):
                       else dict( (a, None) for a in argnames )
 
     def symbol_lookup( s ):
-        print "-- symbol_lookup( %s ), idx_name=%s, results_name=%s" % (s,idx_name,results_name)
         # returns: requires_declaration, type, string_representation
         if s == idx_name or s == 'gid':
             return False, None, 'gid'
@@ -244,7 +239,6 @@ def function_to_kernel( f, types, bindings=None ):
         if s == results_name or s == 'res_g':
             return False, None, 'res_g'
 
-        print "-- s=%s, argname_to_type=%s, bindings=%s" % (s, argname_to_type, bindings)
         if argname_to_type:
             if s in argname_to_type:
                 return False, argname_to_type[s], s
@@ -258,7 +252,6 @@ def function_to_kernel( f, types, bindings=None ):
     # FIXME: this doesn't cover if/then, for, while ...
     [funcbod] = func.findall('./body')
     declarations = {}
-    print "-- pre-assign:", list(funcbod.getchildren())
     assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
 
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
@@ -266,14 +259,13 @@ def function_to_kernel( f, types, bindings=None ):
     [body] = func.findall("./body")
     kernel_body = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
-    sigs = ['__global uchar *res_g']
-    sigs.extend( ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
-                 if types else ["__global const float *%s" % aname for aname in argnames] )
+    sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+           if types else ["__global const float *%s" % aname for aname in argnames]
+    sigs.append( '__global uchar *res_g' )
 
     input_sig =  ', '.join(sigs)
     decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
 
-    print "-- assignments:", assignments
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 

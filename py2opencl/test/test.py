@@ -39,8 +39,7 @@ def avg_img_py( img_arr ):
         left = img[(i - depth) % totpix]
         up = img[(i - rowcount) % totpix]
         down = img[(i + rowcount) % totpix]
-        #dest[i] = (right + left + up + down) / 4
-        dest[i] = img[ (i+depth) % totpix ]
+        dest[i] = (right + left + up + down) / 4
 
     flat_arr = img_arr.ravel()
     img = np.empty_like(flat_arr)
@@ -60,8 +59,6 @@ def avg_img( img_arr ):
     rowcount = cols * depth   # of cells per row
     totpix = len(flat_arr)
 
-    print "-- flat_arr:", flat_arr.dtype
-
     def avg( i, dest, img ):
         """
         in order to enforce wrap-around, we'll take mod of each coord
@@ -70,8 +67,7 @@ def avg_img( img_arr ):
         left = img[(i - depth) % totpix]
         up = img[(i - rowcount) % totpix]
         down = img[(i + rowcount) % totpix]
-        #dest[i] = (right + left + up + down) / 4
-        dest[i] = img[ (i+depth) % totpix ]
+        dest[i] = (right + left + up + down) / 4
 
 
     img = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
@@ -89,7 +85,7 @@ def main():
     ocl_result = avg_img( img_arr )
     py_result = avg_img_py( img_arr )
 
-    Image.fromarray( ocl_result, 'RGB').save('/tmp/oclfoo.png')
+    Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
     Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
     assert (ocl_result == py_result).all()

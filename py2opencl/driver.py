@@ -40,11 +40,15 @@ class Py2OpenCL(object):
         """
         length, types = None, []
         for a in arrays:
-            if a.dtype in (np.dtype('float16'), np.dtype('float32'), np.dtype('float64')):
-                types.append('float')
-            elif a.dtype in (np.dtype('uint8'), np.dtype('int16'), np.dtype('int32'), np.dtype('int64')):
-                types.append('int')
-            else:
+            try:
+                types.append( {np.dtype('float16'): 'half',
+                               np.dtype('float32'): 'float',
+                               np.dtype('float64'): 'double',
+                               np.dtype('uint8'): 'uchar',
+                               np.dtype('int16'): 'short',
+                               np.dtype('int32'): 'int',
+                               np.dtype('int64'): 'long'}[ a.dtype ] )
+            except KeyError:
                 raise ValueError("invalid numpy type: "+str(a.dtype))
 
             if length is None:
@@ -56,12 +60,8 @@ class Py2OpenCL(object):
         self.argnames, self._kernel = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
         assert self.argnames and len(self.argnames) == len(arrays)
 
-        print "--", 0
-
         # compile openCL
         self.prog = cl.Program(self.ctx, self._kernel).build()
-
-        print "--", 1
 
         mf = cl.mem_flags
         buffs, nbytes = [], arrays[0].nbytes
@@ -71,21 +71,11 @@ class Py2OpenCL(object):
         # results:
         buffs.append( cl.Buffer(self.ctx, mf.WRITE_ONLY, nbytes) )
 
-        print "--", 2
-
         # run!
         self.prog.sum(self.queue, arrays[0].shape, None, *buffs)
 
-        print "--", 4
-
         res_np = np.empty_like(arrays[0])
-
-        print "--", 5, np.mean(res_np)
-
         cl.enqueue_copy(self.queue, res_np, buffs[-1])
-
-        print "--", 6, np.mean(res_np)
-
         return res_np.copy()
 
 

@@ -21,35 +21,8 @@ def avg_img_files( src_path, dest_path ):
     Image.fromarray( result, 'RGB').save( dest_path )
 
 
-def avg_img_py( img_arr ):
-    """
-    python-only version of avg_img
-    """
-    # see http://stackoverflow.com/questions/15612373/convert-image-png-to-matrix-and-then-to-1d-array
-    rows, cols, depth = img_arr.shape
-    flat_arr = img_arr.ravel()
-    rowcount = cols * depth   # of cells per row
-    totpix = len(flat_arr)
 
-    def avg( i, dest, img ):
-        """
-        in order to enforce wrap-around, we'll take mod of each coord
-        """
-        right = img[(i + depth) % totpix]
-        left = img[(i - depth) % totpix]
-        up = img[(i - rowcount) % totpix]
-        down = img[(i + rowcount) % totpix]
-        dest[i] = (right + left + up + down) / 4
-
-    flat_arr = img_arr.ravel()
-    img = np.empty_like(flat_arr)
-    for i in range(len(flat_arr)):
-        avg( i, img, flat_arr )
-
-    return img.reshape( (rows, cols, depth) )
-
-
-def avg_img( img_arr ):
+def avg_img( img_arr, purepy=False ):
     """
     load an image and set each pixel to the avg of its cardinal neighbors
     """
@@ -59,20 +32,29 @@ def avg_img( img_arr ):
     rowcount = cols * depth   # of cells per row
     totpix = len(flat_arr)
 
-    def avg( i, dest, img ):
+    def avg( i, dest, src ):
         """
         in order to enforce wrap-around, we'll take mod of each coord
+
+        NOTE: the GID/pointer arithmetic gets a bit tricky w/ unsigned values, so we add an extra
+        @totpix before the mod in order to keep everything > 0
         """
-        right = img[(i + depth) % totpix]
-        left = img[(i - depth) % totpix]
-        up = img[(i - rowcount) % totpix]
-        down = img[(i + rowcount) % totpix]
-        dest[i] = (right + left + up + down) / 4
+        right = src[(totpix + i + depth) % totpix]
+        left = src[(totpix + i - depth) % totpix]
+        up = src[(totpix + i - rowcount) % totpix]
+        down = src[(totpix + i + rowcount) % totpix]
+        # (a + b + ... ) / 4 can cause overflow
+        dest[i] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
 
+    if purepy:
+        dest = np.empty_like(flat_arr)
+        for i in range(len(flat_arr)):
+            avg( i, dest, flat_arr )
 
-    img = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
+    else:
+        dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
 
-    return img.reshape( (rows, cols, depth) )
+    return dest.reshape( (rows, cols, depth) )
 
 
 def main():
@@ -83,7 +65,7 @@ def main():
     img_arr = np.array(img)
 
     ocl_result = avg_img( img_arr )
-    py_result = avg_img_py( img_arr )
+    py_result = avg_img( img_arr, purepy=True )
 
     Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
     Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')

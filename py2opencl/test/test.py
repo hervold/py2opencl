@@ -36,7 +36,7 @@ def avg_img( img_arr, purepy=False ):
         """
         in order to enforce wrap-around, we'll take mod of each coord
 
-        NOTE: the GID/pointer arithmetic gets a bit tricky w/ unsigned values, so we add an extra
+        NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?), so we add an extra
         @totpix before the mod in order to keep everything > 0
         """
         right = src[(totpix + i + depth) % totpix]
@@ -74,20 +74,6 @@ def main():
 
     import sys
     sys.exit(0)
-
-    C = 10
-    def f(i, x, y):
-        # @i - index; @x - results
-        if i < 244:
-            z = F.sin( y[i] ) or -1
-        else:
-            z = 1
-        x[i] = z + C
-
-    arr = np.random.rand(10000000).astype(np.float32)
-
-    Py2OpenCL( f, bindings={'C': 10} ).map( arr )
-
 
     lmb = lambda x: -x if x < 0.5 else F.sin(x)
     #arr = (1000 * np.random.rand(1000)).astype(np.int32)

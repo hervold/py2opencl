@@ -9,36 +9,101 @@ import inspect
 from . import ast2xml
 import xml.etree.ElementTree as ET
 import re
+import numpy as np
 
-def special_funcs( module, funcname, symbol_lookup, args ):
+
+#  numpy char-code : openCL scalar type
+np_char_codes = {'b': 'char',
+                 'h': 'short',
+                 'i': 'int',
+                 'l': 'long',
+                 'B': 'uchar',
+                 'H': 'ushort',
+                 'I': 'uint',
+                 'L': 'ulong',
+                 'e': 'half',
+                 'f': 'float',
+                 'd': 'double',}
+typ_to_np_char = dict( (v,k) for k,v in np_char_codes.items() )
+
+
+def derive_func_typ( func ):
+    if type(func) == np.ufunc:
+        found_float, found_int = False, False
+        for t in func.types:
+            # encoded as 'X+->X', eg, bb->b or G->G
+            if t[-1] in "efdgFDGO":
+                found_float = True
+            elif t[-1] in "bBhHiIlLqQO":
+                found_int = True
+            if found_int and found_float:
+                break
+        if found_int and found_float:
+            return None
+        if found_int:
+            return '_int'
+        if found_float:
+            return '_float'
+        raise TypeError("don't understand ufunc types: "+str(func.types))
+    else:
+        return func.rettype
+
+
+
+def special_funcs( modname, funcname, symbol_lookup, args ):
     if not module and funcname == 'int':
         # FIXME: should we check the type of args?
-        #return 'convert_int4_rtz'
-        return 'convert_int_rtz'
+        return 'convert_int_rtz', '_int'
     if not module and funcname == 'float':
-        #return 'convert_float4_rtz'
-        return 'convert_float_rtz'
-    return funcname
+        return 'convert_float_rtz', '_float'
 
 
-def conv( el, symbol_lookup=None, declarations=None ):
+    # FIXME: enforce args
+    import importlib
+    mod = importlib.import_module(modname)
+    try:
+        func = mod.__getattribute__(funcname)
+
+        # requires_declaration, type, string_representation
+        print func.types
+        print [symbol_lookup(a)[1] for a in args]
+
+        return funcname, derive_func_typ( func )
+    except AttributeError:
+        return funcname, None
+
+
+def conv( el, symbol_lookup, declarations=None ):
+    def is_float(s):
+        if s.startswith('float'):
+            return s
+        raise ValueError('%s is not float' % s)
+    
+    def is_int(s):
+        if s.startswith('int') or s.startswith('uint'):
+            return s
+        raise ValueError('%s is not int' % s)
+
+    # symbol_lookup returns: requires_declaration, type, string_representation
     def _conv( el ):
         return conv( el, symbol_lookup,  declarations)
 
     def cpow( left_el, right_el ):
-	return "pow( %s, %s )" % (_conv(left_el), _conv(right_el))
+        (ltyp, lval), (rtyp, rval) =  (_conv(left_el), _conv(right_el))
+        assert None in (ltyp,rtyp) or ltyp == rtyp, "pow requires types match; got %s, %s" % (ltyp,rtyp)
+	return "pow( %s, %s )" % (lval,rval), ltyp if ltyp is not None else rtyp
 
     def cnumeric( s ):
 	try:
-	    return str(int(s))
+	    return str(int(s)), symbol_lookup(s)[1]
 	except ValueError:
-	    return s
+	    return s, None
 
     def conv_cmp( s ):
         # unsupported: Is | IsNot | In | NotIn
         try:
             return {'Eq': '==', 'NotEq': '!=', 'Lt': '<', 'LtE': '<=',
-                    'Gt': '>', 'GtE': '>='}[ s ]
+                    'Gt': '>', 'GtE': '>='}[ s ], None
         except KeyError:
             raise ValueError("comparitor not supported: '%s'" % str(s))
 
@@ -47,10 +112,9 @@ def conv( el, symbol_lookup=None, declarations=None ):
 	# identity function
 	iden = el.get('id')
         if iden == 'True' or iden == 'False':
-            return iden.lower()
-        if symbol_lookup is not None:
-            return symbol_lookup(iden)[2]
-        return '{{' + iden + '}}'
+            return iden.lower(), 'bool'
+        _, typ, nom = symbol_lookup(iden)
+        return nom, typ
 
     if name == 'Num':
 	# number literal
@@ -59,17 +123,17 @@ def conv( el, symbol_lookup=None, declarations=None ):
     if name == 'BoolOp':
 	[op] = el.findall('./op')
 	operands = [_conv(x) for x in el.findall('./values/_list_element')]
-        return '(%s)' % ({'And': ' && ', 'Or': ' || '}[op.get('_name')]).join( operands )
+        return '(%s)' % ({'And': ' && ', 'Or': ' || '}[op.get('_name')]).join( operands ), 'bool'
 
     if name == 'UnaryOp':
 	[operand] = el.findall("./operand")
-	operand = _conv( operand )
+	operand, typ = _conv( operand )
 	# Invert | Not | UAdd | USub
 	[op] = el.findall('./op')
-	return {'Invert':	'~' + operand,
-		'Not':		'!' + operand,
-		'UAdd':		operand,
-		'USub':		'-' + operand}[ op.get('_name') ]
+	return {'Invert':	('~' + operand, typ),
+		'Not':		('!' + operand, typ),
+		'UAdd':		(operand, typ),
+		'USub':		('-' + operand, typ) }[ op.get('_name') ]
 
     if name == 'BinOp':
 	[op] = el.findall('./op')
@@ -78,31 +142,37 @@ def conv( el, symbol_lookup=None, declarations=None ):
         if op.get('_name') == 'Pow':
             return cpow( left, right )
 
-	cop = {'Add': '+', 'Sub':'-','Mult':'*','Div':'/','Mod':'%',
-               'LShift':'<<','RShift':'>>','BitOr':'|',
-               'BitXor':'^','BitAnd':'&','FloorDiv':'/'}[ op.get('_name') ]
+	cop = {'Add':'+', 'Sub':'-', 'Mult':'*', 'Div':'/', 'Mod':'%',
+               'LShift':'<<', 'RShift':'>>', 'BitOr':'|',
+               'BitXor':'^', 'BitAnd':'&', 'FloorDiv':'/'}[ op.get('_name') ]
 
-	return '(%s %s %s)' % (_conv(left), cop, _conv(right))
+        (lval, ltyp), (rval, rtyp) =  _conv(left), _conv(right)
+        typ = ltyp if rtyp is None else rtyp
+	return '(%s %s %s)' % (lval, cop, rval), typ
 
     if name == 'If':
         [test] = el.findall('./test')
         [body] = el.findall('./body')
-        body = ';\n'.join( _conv(x) for x in body.findall('./_list_element') )
+        l = [_conv(x) for x in body.findall('./_list_element')]
+        body = ';\n'.join( a for a,b in l )
         ret = """if( %s ) {
 %s
-}""" % (_conv(test), body)
+}""" % (_conv(test)[0], body)
 
         if el.findall('./orelse'):
             [orelse] = el.findall('./orelse')
-            orelse = ';\n'.join( _conv(x) for x in orelse.findall('./_list_element') )
+            l = [_conv(x) for x in orelse.findall('./_list_element')]
+            orelse = ';\n'.join( a for a,b in l )
             ret += " else { %s }" % orelse
-        return ret
+        return ret, None
 
     if name == 'IfExp':
 	[test] = el.findall('./test')
         [iftrue] = el.findall('./body')
         [iffalse] = el.findall('./orelse')
-        return '(%s ? %s : %s)' % (_conv(test), _conv(iftrue), _conv(iffalse))
+        (ltyp, lval), (rtyp, rval) = _conv(iftrue), _conv(iffalse)
+        typ = rtyp if ltyp is None else rtyp
+        return '(%s ? %s : %s)' % (_conv(test)[0], lval, rval), typ
 
     if name == 'Compare':
 	# to suppory Python's y < 1 < x < 20 syntax ...
@@ -117,7 +187,7 @@ def conv( el, symbol_lookup=None, declarations=None ):
         l = []
         for i in range(len(operands)-1):
             l.append( '(%s %s %s)' % (operands[i], ops[i], operands[i+1]) )
-        return '(' + ' && '.join(l) + ')'
+        return '(' + ' && '.join(l) + ')', 'bool'
 
     if name == 'Call':
         [funcname] = el.findall('./func')
@@ -129,30 +199,33 @@ def conv( el, symbol_lookup=None, declarations=None ):
         funcname = funcname.get('attr') if funcname.get('attr') else funcname.get('id')
 
         args = map( _conv, el.findall('./args/_list_element') )
-        funcname = special_funcs( module, funcname,  symbol_lookup, args )
+        funcname, typ = special_funcs( module, funcname,  symbol_lookup, args )
 
         # FIXME: problem here is that args could easily be a more complex expression ...
-        return '%s( %s )' % (funcname, ', '.join(args))
+        return '%s( %s )' % (funcname, ', '.join(args)), typ
 
     if name == 'Assign':
         [target] = el.findall('./targets/_list_element')
-        target = _conv(target) # eg, 'x' .get('id')
+        target, _ = _conv(target) # eg, 'x' .get('id')
 
         [operand] =  el.findall('./value')
-        operand = _conv(operand)
+        operand, _ = _conv(operand)
 
         # hackiness here:
         assert symbol_lookup
         target_name = re.match( r'(\w+)\[?', target ).group(1)
-        if symbol_lookup( target_name )[0]:
-            declarations[ target ] = 'uchar'
-            return '%s = %s;' % (target, operand)
-        return '%s = %s;' % (target, operand)
+        decl, typ, nom = symbol_lookup( target_name )
+        if decl:
+            declarations[ target ] = typ
+            return '%s = %s;' % (target, operand), typ
+        return '%s = %s;' % (target, operand), typ
 
     if name == 'Subscript':
         [name] = el.findall('./value')
         [subscr] = el.findall('./slice')
-        return '%s[%s]' % (_conv(name), _conv(subscr))
+        val, typ = _conv(name)
+        sval, styp = _conv(subscr)
+        return '%s[%s]' % (val, sval), typ
 
     if name == 'Index':
         [val] = el.findall('./value')
@@ -160,8 +233,9 @@ def conv( el, symbol_lookup=None, declarations=None ):
 
     if name == 'Expr':
         # we can safely ignore these?  random strings (such as docstrings) come back as Expressions
-        return ''
+        return '', None
 
+    return None, None
 
 import xml.dom.minidom
 def pprint( s ):
@@ -196,7 +270,7 @@ def lambda_to_kernel( lmb, types, bindings=None ):
         return False, None, (s + '[gid]')
 
     [body] = func.findall("./body")
-    kernel_body = conv(body, symbol_lookup=symbol_lookup)
+    kernel_body, typ = conv(body, symbol_lookup=symbol_lookup)
 
     input_sig = ', '.join("__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)) \
                 if types \
@@ -253,11 +327,14 @@ def function_to_kernel( f, types, bindings=None ):
     [funcbod] = func.findall('./body')
     declarations = {}
     assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
+    print "-- assignments:", assignments
+    print "-- types:", [b for a,b in assignments]
+    assignments = [a for a,b in assignments]
 
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
 
     [body] = func.findall("./body")
-    kernel_body = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
+    kernel_body, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
            if types else ["__global const float *%s" % aname for aname in argnames]

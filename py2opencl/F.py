@@ -68,16 +68,31 @@ remainder = numpy.remainder
 #rint = __func
 rootn = lambda x, y: numpy.power( x, 1.0 / y )
 round = numpy.round
+
 rsqrt = lambda x: numpy.power( x, -0.5 )
+
 sin = numpy.sin
+
 #sincos = __func2 # fixme
+
 sinh = numpy.sinh
+
 sinpi = lambda x: numpy.sin( numpy.pi * x )
+sinpi.argtypes = []
+sinpi.rettype = ''
+
 sqrt = numpy.sqrt
+
 tan = numpy.tan
+
 tanh = numpy.tanh
+
 tanpi = lambda x: numpy.tan( numpy.pi * x )
+tanpi.argtypes = []
+tanpi.rettype = ''
+
 tgamma = scipy.special.gamma
+
 trunc = numpy.trunc
 
 
@@ -89,6 +104,9 @@ import inspect
 __varnames = locals().keys()
 for k in __varnames:
     if not 'k'.startswith('_') and type( locals()[k] == type(acos) ):
-        locals()[k].argtypes = [__floats for _ in inspect.getargspec( locals()[k] )[0]]
-        locals()[k].rettype = __floats
+        f = locals()[k]
+        try:                                 f.argtypes = ['_float' for _ in inspect.getargspec( locals()[k] )[0]]
+        except (AttributeError, TypeError):  pass
+        try:                                 f.rettype = '_float'
+        except (AttributeError, TypeError):  pass
 '''

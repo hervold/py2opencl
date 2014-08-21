@@ -206,15 +206,16 @@ def conv( el, symbol_lookup, declarations=None ):
 
     if name == 'Assign':
         [target] = el.findall('./targets/_list_element')
-        target, _ = _conv(target) # eg, 'x' .get('id')
+        target, ttyp = _conv(target) # eg, 'x' .get('id')
 
         [operand] =  el.findall('./value')
-        operand, _ = _conv(operand)
+        operand, otyp = _conv(operand)
 
         # hackiness here:
         assert symbol_lookup
         target_name = re.match( r'(\w+)\[?', target ).group(1)
-        decl, typ, nom = symbol_lookup( target_name )
+        decl, styp, nom = symbol_lookup( target_name )
+        typ = styp or ttyp or otyp
         if decl:
             declarations[ target ] = typ
             return '%s = %s;' % (target, operand), typ

@@ -11,9 +11,10 @@ import xml.etree.ElementTree as ET
 import re
 import numpy as np
 
+USING_BEIGNET = False
 
 #  numpy char-code : openCL scalar type
-np_char_codes = {'b': 'char',
+npchar_to_typ = {'b': 'char',
                  'h': 'short',
                  'i': 'int',
                  'l': 'long',
@@ -24,7 +25,22 @@ np_char_codes = {'b': 'char',
                  'e': 'half',
                  'f': 'float',
                  'd': 'double',}
-typ_to_np_char = dict( (v,k) for k,v in np_char_codes.items() )
+typ_to_npchar = dict( (v,k) for k,v in npchar_to_typ.items() )
+
+
+def verify_apply( func, argtypes ):
+    """
+    verify_apply( func, argtypes )
+
+    verify that function accepts arg types given
+    returns return-type of function
+    """
+    if type(func) == np.ufunc:
+        found_matching = False
+        for t in func.types:
+            args, ret = t.split('->')
+            #print map( npchar_to_typ.get, args ), '==?', argtypes
+    return None
 
 
 def derive_func_typ( func ):
@@ -51,24 +67,26 @@ def derive_func_typ( func ):
 
 
 def special_funcs( modname, funcname, symbol_lookup, args ):
-    if not module and funcname == 'int':
-        # FIXME: should we check the type of args?
+
+    if not modname and funcname == 'int':
+        # FIXME: should we check the type of args?  also, need we worry about the return type required
         return 'convert_int_rtz', '_int'
-    if not module and funcname == 'float':
+    if not modname and funcname == 'float':
         return 'convert_float_rtz', '_float'
 
 
     # FIXME: enforce args
     import importlib
-    mod = importlib.import_module(modname)
+    try:
+        mod = importlib.import_module(modname)
+    except ImportError:
+        mod = importlib.import_module('.'+modname, package='py2opencl')
     try:
         func = mod.__getattribute__(funcname)
 
         # requires_declaration, type, string_representation
-        print func.types
-        print [symbol_lookup(a)[1] for a in args]
-
-        return funcname, derive_func_typ( func )
+        argtypes = [symbol_lookup(a)[1] for a,_ in args]
+        return funcname, verify_apply( func, argtypes )
     except AttributeError:
         return funcname, None
 
@@ -89,7 +107,7 @@ def conv( el, symbol_lookup, declarations=None ):
         return conv( el, symbol_lookup,  declarations)
 
     def cpow( left_el, right_el ):
-        (ltyp, lval), (rtyp, rval) =  (_conv(left_el), _conv(right_el))
+        (lval, ltyp), (rval, rtyp) =  (_conv(left_el), _conv(right_el))
         assert None in (ltyp,rtyp) or ltyp == rtyp, "pow requires types match; got %s, %s" % (ltyp,rtyp)
 	return "pow( %s, %s )" % (lval,rval), ltyp if ltyp is not None else rtyp
 
@@ -147,7 +165,7 @@ def conv( el, symbol_lookup, declarations=None ):
                'BitXor':'^', 'BitAnd':'&', 'FloorDiv':'/'}[ op.get('_name') ]
 
         (lval, ltyp), (rval, rtyp) =  _conv(left), _conv(right)
-        typ = ltyp if rtyp is None else rtyp
+        typ = rtyp or ltyp
 	return '(%s %s %s)' % (lval, cop, rval), typ
 
     if name == 'If':
@@ -162,7 +180,7 @@ def conv( el, symbol_lookup, declarations=None ):
         if el.findall('./orelse'):
             [orelse] = el.findall('./orelse')
             l = [_conv(x) for x in orelse.findall('./_list_element')]
-            orelse = ';\n'.join( a for a,b in l )
+            orelse = ';\n'.join( a for a,_ in l )
             ret += " else { %s }" % orelse
         return ret, None
 
@@ -170,8 +188,8 @@ def conv( el, symbol_lookup, declarations=None ):
 	[test] = el.findall('./test')
         [iftrue] = el.findall('./body')
         [iffalse] = el.findall('./orelse')
-        (ltyp, lval), (rtyp, rval) = _conv(iftrue), _conv(iffalse)
-        typ = rtyp if ltyp is None else rtyp
+        (lval, ltyp), (rval, rtyp) = _conv(iftrue), _conv(iffalse)
+        typ = ltyp or rtyp
         return '(%s ? %s : %s)' % (_conv(test)[0], lval, rval), typ
 
     if name == 'Compare':
@@ -184,9 +202,10 @@ def conv( el, symbol_lookup, declarations=None ):
                                     key=lambda x: (int(x.get('lineno')), int(x.get('col_offset'))) )
 	operands = [_conv( item ) for item in operands]
         assert len(operands) == len(ops) + 1
+        # FIXME: enforce types?
         l = []
         for i in range(len(operands)-1):
-            l.append( '(%s %s %s)' % (operands[i], ops[i], operands[i+1]) )
+            l.append( '(%s %s %s)' % (operands[i][0], ops[i][0], operands[i+1][0]) )
         return '(' + ' && '.join(l) + ')', 'bool'
 
     if name == 'Call':
@@ -196,13 +215,13 @@ def conv( el, symbol_lookup, declarations=None ):
             [module] = module
             module = module.get('id')
 
-        funcname = funcname.get('attr') if funcname.get('attr') else funcname.get('id')
+        funcname = funcname.get('attr') or funcname.get('id')
 
         args = map( _conv, el.findall('./args/_list_element') )
         funcname, typ = special_funcs( module, funcname,  symbol_lookup, args )
 
         # FIXME: problem here is that args could easily be a more complex expression ...
-        return '%s( %s )' % (funcname, ', '.join(args)), typ
+        return '%s( %s )' % (funcname, ', '.join(a for a,t in args)), typ
 
     if name == 'Assign':
         [target] = el.findall('./targets/_list_element')
@@ -267,6 +286,10 @@ def lambda_to_kernel( lmb, types, bindings=None ):
         if argname_to_type:
             if s in argname_to_type:
                 return False, argname_to_type[s], (s + '[gid]')
+            else:
+                # hackiness here:
+                target_name = re.match( r'(\w+)\[?', s ).group(1)
+                return symbol_lookup( target_name ) # + [....] ?
             raise ValueError('symbol not found: %s' % str(s))
         return False, None, (s + '[gid]')
 
@@ -278,12 +301,14 @@ def lambda_to_kernel( lmb, types, bindings=None ):
                    else ', '.join("__global const float *%s" % aname for aname in argnames)
 
     kernel = """
-#pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 __kernel void sum( %(sig)s, __global uchar *res_g) {
   int gid = get_global_id(0);
   res_g[gid] = %(body)s;
 }""" % {'sig': input_sig, 'body': kernel_body}
+
+    if USING_BEIGNET:
+        kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     return (argnames, kernel)
 
@@ -328,8 +353,6 @@ def function_to_kernel( f, types, bindings=None ):
     [funcbod] = func.findall('./body')
     declarations = {}
     assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
-    print "-- assignments:", assignments
-    print "-- types:", [b for a,b in assignments]
     assignments = [a for a,b in assignments]
 
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
@@ -345,7 +368,6 @@ def function_to_kernel( f, types, bindings=None ):
     decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
 
     kernel = """
-#pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 __kernel void sum( %(sig)s ) {
   %(decl)s
@@ -353,7 +375,8 @@ __kernel void sum( %(sig)s ) {
   %(body)s
 }""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
-    print kernel
+    if USING_BEIGNET:
+        kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     return (argnames, kernel)
 

@@ -64,28 +64,42 @@ def main():
     img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
     img_arr = np.array(img)
 
+    before = time.time()
     ocl_result = avg_img( img_arr )
-    py_result = avg_img( img_arr, purepy=True )
+    print "-- openCL:", time.time() - before
+    before = time.time()
+    #py_result = avg_img( img_arr, purepy=True )
+    #print "-- python:", time.time() - before
 
     Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
-    Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
+    #Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
-    assert (ocl_result == py_result).all()
+    #assert (ocl_result == py_result).all()
 
-    import sys
-    sys.exit(0)
-
-    lmb = lambda x: -x if x < 0.5 else F.sin(x)
-    #arr = (1000 * np.random.rand(1000)).astype(np.int32)
+    arr = np.random.rand( int(1e6) )
 
     print '-- float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
 
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
+    def f( i, dest, src ):
+        x = src[i]
+        if x < 0.5:
+            dest[i] = -src[i]
+        else:
+            dest[i] = F.sin(x)
+
+    _a = Py2OpenCL( f ).map( arr )
+
+    lmb = lambda x: -x if x < 0.5 else F.sin(x)
+
     before = time.time()
     py2 = Py2OpenCL( lmb )
     ctx = py2.ctx
     a = py2.map( arr )
+
+    assert (_a == a).all()
+
     print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
     # b = lmb( arr )  # conditionals don't work this way in Numpy
     before = time.time()

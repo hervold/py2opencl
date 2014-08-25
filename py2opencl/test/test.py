@@ -59,6 +59,10 @@ def avg_img( img_arr, purepy=False ):
 
 def main():
 
+    a = Py2OpenCL( lambda x: int( x ) ).map( np.random.rand( int(1e3) ) )
+    import sys
+    sys.exit(0)
+
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
 
     img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel

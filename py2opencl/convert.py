@@ -255,7 +255,8 @@ def conv( el, symbol_lookup, declarations=None ):
         # we can safely ignore these?  random strings (such as docstrings) come back as Expressions
         return '', None
 
-    return None, None
+    #raise ValueError, "We don't know what to do with an element of type '%s'" % name
+    return '', None
 
 import xml.dom.minidom
 def pprint( s ):
@@ -264,8 +265,8 @@ def pprint( s ):
     return xml.dom.minidom.parseString( s ).toprettyxml()
 
 
-
 def lambda_to_kernel( lmb, types, bindings=None ):
+    print "-- lambda_to_kernel - types="+str(types)
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -296,19 +297,24 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     [body] = func.findall("./body")
     kernel_body, typ = conv(body, symbol_lookup=symbol_lookup)
 
-    input_sig = ', '.join("__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)) \
-                if types \
-                   else ', '.join("__global const float *%s" % aname for aname in argnames)
+    sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+           if types \
+             else ["__global const float *%s" % aname for aname in argnames]
+    sigs.append('__global uchar *res_g')
+    sigs = ', '.join(sigs)
 
     kernel = """
 
-__kernel void sum( %(sig)s, __global uchar *res_g) {
+__kernel void sum( %(sigs)s ) {
   int gid = get_global_id(0);
   res_g[gid] = %(body)s;
-}""" % {'sig': input_sig, 'body': kernel_body}
+}""" % {'sigs': sigs, 'body': kernel_body}
 
     if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+
+    print "-- lambda_to_kernel:"
+    print kernel
 
     return (argnames, kernel)
 
@@ -318,6 +324,7 @@ def function_to_kernel( f, types, bindings=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
+    print "-- function_to_kernel - types="+str(types)
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
@@ -377,6 +384,9 @@ __kernel void sum( %(sig)s ) {
 
     if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+
+    print "-- function_to_kernel:"
+    print kernel
 
     return (argnames, kernel)
 

@@ -36,10 +36,20 @@ def verify_apply( func, argtypes ):
     returns return-type of function
     """
     if type(func) == np.ufunc:
-        found_matching = False
+        matching_ret = None
         for t in func.types:
             args, ret = t.split('->')
-            #print map( npchar_to_typ.get, args ), '==?', argtypes
+            assert len(argtypes) == len(args)
+            for atyp, ch in zip(argtypes,args):
+                if npchar_to_typ.get(ch) == atyp: # FIXME: or args[i] is None?
+                    matching_ret = npchar_to_typ[ret]
+                    break
+            if matching_ret:
+                break
+        if matching_ret:
+            return npchar_to_typ
+        raise TypeError("unfunc %s didn't match provided types -- %s not found among types %s" \
+                        % (func.__name__, argtypes, func.types))
     return None
 
 
@@ -73,7 +83,6 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
         return 'convert_int_rtz', '_int'
     if not modname and funcname == 'float':
         return 'convert_float_rtz', '_float'
-
 
     # FIXME: enforce args
     import importlib
@@ -236,8 +245,8 @@ def conv( el, symbol_lookup, declarations=None ):
         decl, styp, nom = symbol_lookup( target_name )
         typ = styp or ttyp or otyp
         if decl:
-            declarations[ target ] = typ
-            return '%s = %s;' % (target, operand), typ
+            declarations[ target_name ] = typ
+
         return '%s = %s;' % (target, operand), typ
 
     if name == 'Subscript':
@@ -338,6 +347,9 @@ def function_to_kernel( f, types, bindings=None ):
     argname_to_type = dict( zip( argnames, types ) ) if types \
                       else dict( (a, None) for a in argnames )
 
+    print "-- argname_to_type:", argname_to_type
+
+    declarations = {}
     def symbol_lookup( s ):
         # returns: requires_declaration, type, string_representation
         if s == idx_name or s == 'gid':
@@ -345,6 +357,8 @@ def function_to_kernel( f, types, bindings=None ):
 
         if s == results_name or s == 'res_g':
             return False, None, 'res_g'
+
+        print "-- in symbol_looking -- s=%s, s in argname_to_type = %s" % (s, s in argname_to_type)
 
         if argname_to_type:
             if s in argname_to_type:
@@ -354,11 +368,10 @@ def function_to_kernel( f, types, bindings=None ):
             if s in bindings:
                 return False, type(bindings[s]), str(bindings[s])
 
-        return True, None, s
+        return True, declarations.get(s), s
 
     # FIXME: this doesn't cover if/then, for, while ...
     [funcbod] = func.findall('./body')
-    declarations = {}
     assignments = [conv(el, symbol_lookup=symbol_lookup, declarations=declarations) for el in funcbod.getchildren()]
     assignments = [a for a,b in assignments]
 

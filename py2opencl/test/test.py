@@ -59,9 +59,12 @@ def avg_img( img_arr, purepy=False ):
 
 def main():
 
-    a = Py2OpenCL( lambda x: int( x ) ).map( np.random.rand( int(1e3) ) )
-    import sys
-    sys.exit(0)
+    raised_expected = False
+    try:
+        _ = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )).astype('int64') )
+    except TypeError:
+        raised_expected = True
+    assert raised_expected
 
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
 

@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='py2opencl',
-    version='0.2.1',
+    version='0.2.2',
     author='kieran hervold',
     author_email='hervold@gmail.com',
     packages=['py2opencl', 'py2opencl.test'],
@@ -12,6 +12,6 @@ setup(
     long_description=open('README.txt').read(),
     install_requires=[
         "pyopencl >= 2014.1",
-	"pillow >= 2.5.3",
+	"pillow >= 2.3.2",
     ],
 )

@@ -35,54 +35,33 @@ def verify_apply( func, argtypes ):
     verify that function accepts arg types given
     returns return-type of function
     """
-    if type(func) == np.ufunc:
-        matching_ret = None
-        for t in func.types:
-            args, ret = t.split('->')
-            assert len(argtypes) == len(args)
-            for atyp, ch in zip(argtypes,args):
-                if npchar_to_typ.get(ch) == atyp: # FIXME: or args[i] is None?
-                    matching_ret = npchar_to_typ[ret]
-                    break
-            if matching_ret:
+    #if type(func) == np.ufunc:
+    matching_ret = None
+    for t in func.types:
+        args, ret = t.split('->')
+        assert len(argtypes) == len(args)
+        for atyp, ch in zip(argtypes,args):
+            if atyp is None:
+                continue
+            if npchar_to_typ.get(ch) == atyp: # FIXME: or args[i] is None?
+                matching_ret = npchar_to_typ[ret]
                 break
         if matching_ret:
-            return npchar_to_typ
+            return matching_ret
+
+    if set( argtypes ) != set([None]):
         raise TypeError("unfunc %s didn't match provided types -- %s not found among types %s" \
                         % (func.__name__, argtypes, func.types))
     return None
-
-
-def derive_func_typ( func ):
-    if type(func) == np.ufunc:
-        found_float, found_int = False, False
-        for t in func.types:
-            # encoded as 'X+->X', eg, bb->b or G->G
-            if t[-1] in "efdgFDGO":
-                found_float = True
-            elif t[-1] in "bBhHiIlLqQO":
-                found_int = True
-            if found_int and found_float:
-                break
-        if found_int and found_float:
-            return None
-        if found_int:
-            return '_int'
-        if found_float:
-            return '_float'
-        raise TypeError("don't understand ufunc types: "+str(func.types))
-    else:
-        return func.rettype
-
 
 
 def special_funcs( modname, funcname, symbol_lookup, args ):
 
     if not modname and funcname == 'int':
         # FIXME: should we check the type of args?  also, need we worry about the return type required
-        return 'convert_int_rtz', '_int'
+        return 'convert_int_rtz', 'int'
     if not modname and funcname == 'float':
-        return 'convert_float_rtz', '_float'
+        return 'convert_float_rtz', 'float'
 
     # FIXME: enforce args
     import importlib
@@ -275,7 +254,6 @@ def pprint( s ):
 
 
 def lambda_to_kernel( lmb, types, bindings=None ):
-    print "-- lambda_to_kernel - types="+str(types)
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -289,27 +267,28 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     argnames = [a.get('id') for a in args]
     assert argnames
 
-    argname_to_type = dict( zip( argnames, types ) ) if types else None
-
+    declarations = dict( zip( argnames, types ) ) if types else {}
     def symbol_lookup( s ):
+        target_name = None
         # returns: requires_declaration, type, string_representation
-        if argname_to_type:
-            if s in argname_to_type:
-                return False, argname_to_type[s], (s + '[gid]')
-            else:
-                # hackiness here:
-                target_name = re.match( r'(\w+)\[?', s ).group(1)
+        if s in declarations:
+            return True, declarations[s], (s + '[gid]')  # requires_declaration=True, b/c it's moot
+        else:
+            # hackiness here:
+            target_name = re.match( r'(\w+)\[?', s ).group(1)
+            if target_name != s:
                 return symbol_lookup( target_name ) # + [....] ?
-            raise ValueError('symbol not found: %s' % str(s))
-        return False, None, (s + '[gid]')
+        #raise ValueError('symbol not found: %s' % str(s))
+        return False, None, s
 
     [body] = func.findall("./body")
-    kernel_body, typ = conv(body, symbol_lookup=symbol_lookup)
+    kernel_body, result_typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
            if types \
              else ["__global const float *%s" % aname for aname in argnames]
-    sigs.append('__global uchar *res_g')
+
+    sigs.append('__global %s *res_g' % result_typ)
     sigs = ', '.join(sigs)
 
     kernel = """
@@ -322,8 +301,8 @@ __kernel void sum( %(sigs)s ) {
     if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
-    print "-- lambda_to_kernel:"
-    print kernel
+    if bindings is None:
+        kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
 
     return (argnames, kernel)
 
@@ -333,7 +312,7 @@ def function_to_kernel( f, types, bindings=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
-    print "-- function_to_kernel - types="+str(types)
+
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
@@ -347,8 +326,6 @@ def function_to_kernel( f, types, bindings=None ):
     argname_to_type = dict( zip( argnames, types ) ) if types \
                       else dict( (a, None) for a in argnames )
 
-    print "-- argname_to_type:", argname_to_type
-
     declarations = {}
     def symbol_lookup( s ):
         # returns: requires_declaration, type, string_representation
@@ -356,9 +333,7 @@ def function_to_kernel( f, types, bindings=None ):
             return False, None, 'gid'
 
         if s == results_name or s == 'res_g':
-            return False, None, 'res_g'
-
-        print "-- in symbol_looking -- s=%s, s in argname_to_type = %s" % (s, s in argname_to_type)
+            return True, None, 'res_g'
 
         if argname_to_type:
             if s in argname_to_type:
@@ -380,9 +355,13 @@ def function_to_kernel( f, types, bindings=None ):
     [body] = func.findall("./body")
     kernel_body, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
+    # res_g should appear in declarations, as we want to know its inferred type, but we don't actually want to declare it
+    result_typ = declarations['res_g']
+    del declarations['res_g']
+
     sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
            if types else ["__global const float *%s" % aname for aname in argnames]
-    sigs.append( '__global uchar *res_g' )
+    sigs.append( '__global %s *res_g' % result_typ)
 
     input_sig =  ', '.join(sigs)
     decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
@@ -398,8 +377,8 @@ __kernel void sum( %(sig)s ) {
     if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
-    print "-- function_to_kernel:"
-    print kernel
+    if bindings is None:
+        kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
 
     return (argnames, kernel)
 

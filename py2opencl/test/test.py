@@ -29,7 +29,7 @@ def avg_img( img_arr, purepy=False ):
     # see http://stackoverflow.com/questions/15612373/convert-image-png-to-matrix-and-then-to-1d-array
     rows, cols, depth = img_arr.shape
     flat_arr = img_arr.ravel()
-    rowcount = cols * depth   # of cells per row
+    rowcount = cols * depth   # of bytes per row
     totpix = len(flat_arr)
 
     def avg( i, dest, src ):
@@ -75,18 +75,17 @@ def main():
     ocl_result = avg_img( img_arr )
     print "-- openCL:", time.time() - before
     before = time.time()
-    #py_result = avg_img( img_arr, purepy=True )
-    #print "-- python:", time.time() - before
+    py_result = avg_img( img_arr, purepy=True )
+    print "-- python:", time.time() - before
 
     Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
-    #Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
+    Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
-    #assert (ocl_result == py_result).all()
+    assert (ocl_result == py_result).all()
 
     arr = np.random.rand( int(1e6) )
 
     print '-- float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
-
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
     def f( i, dest, src ):

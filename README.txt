@@ -54,7 +54,8 @@ averages the pixels of an image:
         in order to enforce wrap-around, we'll take mod of each coord
     
         NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?),
-	so we add an extra @totpix before the mod in order to keep everything > 0
+	so we add an extra @totpix before the mod in order to keep
+        everything > 0
         """
         right = src[(totpix + i + depth) % totpix]
         left = src[(totpix + i - depth) % totpix]
@@ -64,7 +65,9 @@ averages the pixels of an image:
         dest[i] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
      
      
-    dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
+    # note that we can't determine external values via introspection
+    dest = Py2OpenCL( avg, bindings={'totpix': totpix,
+                                     'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
     avg_img = Image.fromarray( dest.reshape( (rows, cols, depth) ), 'RGB')
     avg_img.save('x.png')
 

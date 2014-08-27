@@ -5,7 +5,7 @@ simple test of py2opencl
 import numpy as np
 import time
 import os.path
-import Image
+from PIL import Image
 
 from ..driver import Py2OpenCL
 from ..convert import lambda_to_kernel

@@ -34,7 +34,8 @@ The following code returns a new numpy array holding the results of the lambda f
     a = py2.map( np.random.rand(10000000) )
 
 
-More complex functions are supported, though there are many constraints.  The following function averages the pixels of an image:
+More complex functions are supported, though there are many constraints.  The following function
+averages the pixels of an image:
 
     import numpy as np
     from py2opencl import Py2OpenCL, F
@@ -52,8 +53,8 @@ More complex functions are supported, though there are many constraints.  The fo
         """
         in order to enforce wrap-around, we'll take mod of each coord
     
-        NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?), so we add an extra
-        @totpix before the mod in order to keep everything > 0
+        NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?),
+	so we add an extra @totpix before the mod in order to keep everything > 0
         """
         right = src[(totpix + i + depth) % totpix]
         left = src[(totpix + i - depth) % totpix]
@@ -71,8 +72,8 @@ More complex functions are supported, though there are many constraints.  The fo
 OpenCL Drivers
 ==============
 
-Py2OpenCL should work out-of-the-box on Mac OS X.  If you're on Linux and don't have a fancy GPU, I'd suggest AMD's ICD,
-found `here http://developer.amd.com/tools-and-sdks/opencl-zone/opencl-tools-sdks/amd-accelerated-parallel-processing-app-sdk/`
+Py2OpenCL should work out-of-the-box on Mac OS X.  If you're on Linux and don't have a fancy GPU,
+I'd suggest AMD's ICD, found `here http://developer.amd.com/tools-and-sdks/opencl-zone/opencl-tools-sdks/amd-accelerated-parallel-processing-app-sdk/`
 (as of 26 Jul 2014).  It supports modern Intel CPU's, no GPU required.  (Presumably it supports AMD CPUs as well.)
 
 As of this writing, Intel's beignet driver appears to be broken on Ubuntu 14.04.

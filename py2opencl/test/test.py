@@ -52,6 +52,7 @@ def avg_img( img_arr, purepy=False ):
             avg( i, dest, flat_arr )
 
     else:
+        print "-- avg"
         dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
 
     return dest.reshape( (rows, cols, depth) )
@@ -69,7 +70,7 @@ def main():
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
 
     try:
-        img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
+        img = Image.open( 'XX'+img_path ).convert('RGB') # 3 uint8's per pixel
     except IOError:
         # had some trouble keeping the test image in the package
         img = None
@@ -80,20 +81,26 @@ def main():
 
         before = time.time()
         ocl_result = avg_img( img_arr )
-        print "-- openCL:", time.time() - before
+        print "-- openCL img-avg:", time.time() - before
         before = time.time()
         py_result = avg_img( img_arr, purepy=True )
-        print "-- python:", time.time() - before
+        print "-- python img-avg:", time.time() - before
 
         Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
         Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
         assert (ocl_result == py_result).all()
 
-    arr = np.random.rand( int(1e6) )
+    arr = np.random.rand( int(1e4) )
 
-    print '-- float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
+    conv = Py2OpenCL( lambda x: int(x) )
+    print conv.kernel
+    print '-- float: -> int:', conv.map( 1000 * arr )
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
+
+    import sys
+    sys.exit(0)
+
 
     def f( i, dest, src ):
         x = src[i]

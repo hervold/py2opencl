@@ -28,6 +28,17 @@ npchar_to_typ = {'b': 'char',
 typ_to_npchar = dict( (v,k) for k,v in npchar_to_typ.items() )
 
 
+type_mapping = {np.dtype('float16'): 'half',
+                np.dtype('float32'): 'float',
+                np.dtype('float64'): 'double',
+                np.dtype('uint8'): 'uchar',
+                np.dtype('int16'): 'short',
+                np.dtype('int32'): 'int',
+                np.dtype('int64'): 'long'}
+rev_mapping = dict( (v,k) for k,v in type_mapping.items() )
+
+
+
 def verify_apply( func, argtypes ):
     """
     verify_apply( func, argtypes )
@@ -61,7 +72,7 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
         # FIXME: should we check the type of args?  also, need we worry about the return type required
         return 'convert_int_rtz', 'int'
     if not modname and funcname == 'float':
-        return 'convert_float_rtz', 'float'
+        return 'convert_double', 'float'
 
     # FIXME: enforce args
     import importlib
@@ -97,7 +108,7 @@ def conv( el, symbol_lookup, declarations=None ):
     def cpow( left_el, right_el ):
         (lval, ltyp), (rval, rtyp) =  (_conv(left_el), _conv(right_el))
         assert None in (ltyp,rtyp) or ltyp == rtyp, "pow requires types match; got %s, %s" % (ltyp,rtyp)
-	return "pow( %s, %s )" % (lval,rval), ltyp if ltyp is not None else rtyp
+	return "pow( %s, %s )" % (lval,rval), ltyp or rtyp
 
     def cnumeric( s ):
 	try:
@@ -114,6 +125,7 @@ def conv( el, symbol_lookup, declarations=None ):
             raise ValueError("comparitor not supported: '%s'" % str(s))
 
     name = el.get('_name')
+
     if name == 'Name':
 	# identity function
 	iden = el.get('id')
@@ -139,7 +151,7 @@ def conv( el, symbol_lookup, declarations=None ):
 	return {'Invert':	('~' + operand, typ),
 		'Not':		('!' + operand, typ),
 		'UAdd':		(operand, typ),
-		'USub':		('-' + operand, typ) }[ op.get('_name') ]
+		'USub':		('-' + operand, typ) }[ op.get('_name') ], typ
 
     if name == 'BinOp':
 	[op] = el.findall('./op')
@@ -283,12 +295,14 @@ def lambda_to_kernel( lmb, types, bindings=None ):
 
     [body] = func.findall("./body")
     kernel_body, result_typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
+    cl_typ = type_mapping[ np.dtype(result_typ) ]
+    print "-- result_typ:", cl_typ
 
-    sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+    sigs = ["__global const %s *%s" % (type_mapping[ np.dtype(typ) ], aname) for typ,aname in zip(types,argnames)] \
            if types \
              else ["__global const float *%s" % aname for aname in argnames]
 
-    sigs.append('__global %s *res_g' % result_typ)
+    sigs.append('__global %s *res_g' % cl_typ)
     sigs = ', '.join(sigs)
 
     kernel = """
@@ -298,13 +312,16 @@ __kernel void sum( %(sigs)s ) {
   res_g[gid] = %(body)s;
 }""" % {'sigs': sigs, 'body': kernel_body}
 
-    if USING_BEIGNET:
+    if True or USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
 
-    return (argnames, kernel)
+    print "~~~ lambda:"
+    print kernel
+
+    return (argnames, kernel, result_typ)
 
 
 
@@ -353,18 +370,21 @@ def function_to_kernel( f, types, bindings=None ):
     #assignments = [conv(el, symbol_lookup=symbol_lookup) for el in func.findall("./body/_list_element[@_name='Assign']")]
 
     [body] = func.findall("./body")
-    kernel_body, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
+    _, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     # res_g should appear in declarations, as we want to know its inferred type, but we don't actually want to declare it
     result_typ = declarations['res_g']
     del declarations['res_g']
 
-    sigs = ["__global const %s *%s" % (typ,aname) for typ,aname in zip(types,argnames)] \
+    cl_typ = type_mapping[ np.dtype(result_typ) ]
+    print "-- result_typ:", cl_typ
+
+    sigs = ["__global const %s *%s" % ( type_mapping[ np.dtype(typ) ], aname) for typ,aname in zip(types,argnames)] \
            if types else ["__global const float *%s" % aname for aname in argnames]
-    sigs.append( '__global %s *res_g' % result_typ)
+    sigs.append( '__global %s *res_g' % cl_typ)
 
     input_sig =  ', '.join(sigs)
-    decl = '\n'.join( '%s %s;' % (typ,nom) for nom, typ in declarations.items())
+    decl = '\n'.join( '%s %s;' % (type_mapping[ np.dtype(typ) ], nom) for nom, typ in declarations.items())
 
     kernel = """
 
@@ -374,13 +394,16 @@ __kernel void sum( %(sig)s ) {
   %(body)s
 }""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
-    if USING_BEIGNET:
+    if True or USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
 
-    return (argnames, kernel)
+    print "~~~ function:"
+    print kernel
+
+    return (argnames, kernel, result_typ)
 
 
 

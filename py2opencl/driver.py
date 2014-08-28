@@ -41,13 +41,7 @@ class Py2OpenCL(object):
         length, types = None, []
         for a in arrays:
             try:
-                types.append( {np.dtype('float16'): 'half',
-                               np.dtype('float32'): 'float',
-                               np.dtype('float64'): 'double',
-                               np.dtype('uint8'): 'uchar',
-                               np.dtype('int16'): 'short',
-                               np.dtype('int32'): 'int',
-                               np.dtype('int64'): 'long'}[ a.dtype ] )
+                types.append( a.dtype )
             except KeyError:
                 raise ValueError("invalid numpy type: "+str(a.dtype))
 
@@ -57,7 +51,11 @@ class Py2OpenCL(object):
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
 
-        self.argnames, self._kernel = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
+        self.argnames, self._kernel, _return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
+        return_typ = np.dtype( _return_typ )
+        print "-- return_typ:", _return_typ, '->', return_typ
+        print
+
         assert self.argnames and len(self.argnames) == len(arrays)
 
         # compile openCL
@@ -74,8 +72,12 @@ class Py2OpenCL(object):
         # run!
         self.prog.sum(self.queue, arrays[0].shape, None, *buffs)
 
-        res_np = np.empty_like(arrays[0])
-        cl.enqueue_copy(self.queue, res_np, buffs[-1])
+        # FIXME: not like!  infer!
+        print "-- results into", return_typ
+        print
+        res_np = np.zeros( len(arrays[0]), dtype=return_typ )
+
+        cl.enqueue_copy( self.queue, res_np, buffs[-1] )
         return res_np.copy()
 
 

@@ -12,6 +12,6 @@ setup(
     long_description=open('README.txt').read(),
     install_requires=[
         "pyopencl >= 2014.1",
-	"pillow >= 2.3.2",
+	"pillow >= 2.3.3",
     ],
 )

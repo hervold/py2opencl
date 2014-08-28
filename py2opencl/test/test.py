@@ -68,20 +68,27 @@ def main():
 
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
 
-    img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
-    img_arr = np.array(img)
+    try:
+        img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
+    except IOError:
+        # had some trouble keeping the test image in the package
+        img = None
+        print "-- couldn't open test image '%s', so skipping that test" % img_path
 
-    before = time.time()
-    ocl_result = avg_img( img_arr )
-    print "-- openCL:", time.time() - before
-    before = time.time()
-    py_result = avg_img( img_arr, purepy=True )
-    print "-- python:", time.time() - before
+    if img:
+        img_arr = np.array(img)
 
-    Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
-    Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
+        before = time.time()
+        ocl_result = avg_img( img_arr )
+        print "-- openCL:", time.time() - before
+        before = time.time()
+        py_result = avg_img( img_arr, purepy=True )
+        print "-- python:", time.time() - before
 
-    assert (ocl_result == py_result).all()
+        Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
+        Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
+
+        assert (ocl_result == py_result).all()
 
     arr = np.random.rand( int(1e6) )
 

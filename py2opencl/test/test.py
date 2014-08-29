@@ -96,10 +96,8 @@ def main():
     conv = Py2OpenCL( lambda x: int(x) )
     print conv.kernel
     print '-- float: -> int:', conv.map( 1000 * arr )
+    print "*\n*\n*\n*"
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
-
-    import sys
-    sys.exit(0)
 
 
     def f( i, dest, src ):

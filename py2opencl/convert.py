@@ -72,7 +72,7 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
         # FIXME: should we check the type of args?  also, need we worry about the return type required
         return 'convert_int_rtz', 'int'
     if not modname and funcname == 'float':
-        return 'convert_double', 'float'
+        return 'convert_double', 'double'
 
     # FIXME: enforce args
     import importlib
@@ -91,6 +91,9 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
 
 
 def conv( el, symbol_lookup, declarations=None ):
+    """
+    returns <openCL-C string representation>, <openCL type>
+    """
     def is_float(s):
         if s.startswith('float'):
             return s
@@ -266,6 +269,10 @@ def pprint( s ):
 
 
 def lambda_to_kernel( lmb, types, bindings=None ):
+    """
+    @types -- numpy types
+    """
+
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -295,14 +302,13 @@ def lambda_to_kernel( lmb, types, bindings=None ):
 
     [body] = func.findall("./body")
     kernel_body, result_typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
-    cl_typ = type_mapping[ np.dtype(result_typ) ]
-    print "-- result_typ:", cl_typ
+    numpy_typ = rev_mapping[result_typ]
 
-    sigs = ["__global const %s *%s" % (type_mapping[ np.dtype(typ) ], aname) for typ,aname in zip(types,argnames)] \
+    sigs = ["__global const %s *%s" % (type_mapping[ typ ], aname) for typ,aname in zip(types,argnames)] \
            if types \
              else ["__global const float *%s" % aname for aname in argnames]
 
-    sigs.append('__global %s *res_g' % cl_typ)
+    sigs.append('__global %s *res_g' % result_typ)
     sigs = ', '.join(sigs)
 
     kernel = """
@@ -312,14 +318,11 @@ __kernel void sum( %(sigs)s ) {
   res_g[gid] = %(body)s;
 }""" % {'sigs': sigs, 'body': kernel_body}
 
-    if True or USING_BEIGNET:
+    if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
-
-    print "~~~ lambda:"
-    print kernel
 
     return (argnames, kernel, result_typ)
 
@@ -377,7 +380,6 @@ def function_to_kernel( f, types, bindings=None ):
     del declarations['res_g']
 
     cl_typ = type_mapping[ np.dtype(result_typ) ]
-    print "-- result_typ:", cl_typ
 
     sigs = ["__global const %s *%s" % ( type_mapping[ np.dtype(typ) ], aname) for typ,aname in zip(types,argnames)] \
            if types else ["__global const float *%s" % aname for aname in argnames]
@@ -394,14 +396,11 @@ __kernel void sum( %(sig)s ) {
   %(body)s
 }""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
-    if True or USING_BEIGNET:
+    if USING_BEIGNET:
         kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
-
-    print "~~~ function:"
-    print kernel
 
     return (argnames, kernel, result_typ)
 

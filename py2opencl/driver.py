@@ -5,8 +5,7 @@ wrapper around PyOpenCL and py2opencl Python -> OpenCL conversion utility
 import pyopencl as cl
 import numpy as np
 
-from .convert import lambda_to_kernel
-
+from .convert import lambda_to_kernel, type_mapping, rev_mapping
 
 import os
 os.environ['PYOPENCL_COMPILER_OUTPUT']='1'
@@ -51,10 +50,8 @@ class Py2OpenCL(object):
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
 
-        self.argnames, self._kernel, _return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
-        return_typ = np.dtype( _return_typ )
-        print "-- return_typ:", _return_typ, '->', return_typ
-        print
+        self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
+        return_typ = rev_mapping[cl_return_typ]
 
         assert self.argnames and len(self.argnames) == len(arrays)
 
@@ -62,20 +59,16 @@ class Py2OpenCL(object):
         self.prog = cl.Program(self.ctx, self._kernel).build()
 
         mf = cl.mem_flags
-        buffs, nbytes = [], arrays[0].nbytes
-        for arr in arrays:
-            buffs.append( cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arr ))
+        res_np = np.zeros( len(arrays[0]), dtype=return_typ )
+
+        buffs = [ cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arr )
+                  for arr in arrays ]
 
         # results:
-        buffs.append( cl.Buffer(self.ctx, mf.WRITE_ONLY, nbytes) )
+        buffs.append( cl.Buffer(self.ctx, mf.WRITE_ONLY, res_np.nbytes) )
 
         # run!
         self.prog.sum(self.queue, arrays[0].shape, None, *buffs)
-
-        # FIXME: not like!  infer!
-        print "-- results into", return_typ
-        print
-        res_np = np.zeros( len(arrays[0]), dtype=return_typ )
 
         cl.enqueue_copy( self.queue, res_np, buffs[-1] )
         return res_np.copy()

@@ -28,14 +28,14 @@ npchar_to_typ = {'b': 'char',
 typ_to_npchar = dict( (v,k) for k,v in npchar_to_typ.items() )
 
 
-type_mapping = {np.dtype('float16'): 'half',
+nptyp_to_cl = {np.dtype('float16'): 'half',
                 np.dtype('float32'): 'float',
                 np.dtype('float64'): 'double',
                 np.dtype('uint8'): 'uchar',
                 np.dtype('int16'): 'short',
                 np.dtype('int32'): 'int',
                 np.dtype('int64'): 'long'}
-rev_mapping = dict( (v,k) for k,v in type_mapping.items() )
+cltyp_to_np = dict( (v,k) for k,v in nptyp_to_cl.items() )
 
 
 
@@ -46,7 +46,9 @@ def verify_apply( func, argtypes ):
     verify that function accepts arg types given
     returns return-type of function
     """
-    #if type(func) == np.ufunc:
+    print "-- verify_apply:", argtypes
+
+    #argtypes = [nptyp_to_cl[t] for t in argtypes]
     matching_ret = None
     for t in func.types:
         args, ret = t.split('->')
@@ -85,6 +87,8 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
 
         # requires_declaration, type, string_representation
         argtypes = [symbol_lookup(a)[1] for a,_ in args]
+        print "-- args:", args
+        print "-- argtypes:", argtypes
         return funcname, verify_apply( func, argtypes )
     except AttributeError:
         return funcname, None
@@ -151,10 +155,10 @@ def conv( el, symbol_lookup, declarations=None ):
 	operand, typ = _conv( operand )
 	# Invert | Not | UAdd | USub
 	[op] = el.findall('./op')
-	return {'Invert':	('~' + operand, typ),
-		'Not':		('!' + operand, typ),
-		'UAdd':		(operand, typ),
-		'USub':		('-' + operand, typ) }[ op.get('_name') ], typ
+	return {'Invert':	'~' + operand,
+		'Not':		'!' + operand,
+		'UAdd':		operand,
+		'USub':		'-' + operand }[ op.get('_name') ], typ
 
     if name == 'BinOp':
 	[op] = el.findall('./op')
@@ -272,7 +276,7 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     """
     @types -- numpy types
     """
-
+    print "-- lambda"
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -302,9 +306,9 @@ def lambda_to_kernel( lmb, types, bindings=None ):
 
     [body] = func.findall("./body")
     kernel_body, result_typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
-    numpy_typ = rev_mapping[result_typ]
+    numpy_typ = cltyp_to_np[result_typ]
 
-    sigs = ["__global const %s *%s" % (type_mapping[ typ ], aname) for typ,aname in zip(types,argnames)] \
+    sigs = ["__global const %s *%s" % (nptyp_to_cl[ typ ], aname) for typ,aname in zip(types,argnames)] \
            if types \
              else ["__global const float *%s" % aname for aname in argnames]
 
@@ -332,7 +336,7 @@ def function_to_kernel( f, types, bindings=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
-
+    print "-- function"
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
@@ -343,7 +347,7 @@ def function_to_kernel( f, types, bindings=None ):
     idx_name = argnames.pop(0)
     results_name = argnames.pop(0)
 
-    argname_to_type = dict( zip( argnames, types ) ) if types \
+    argname_to_type = dict( (nom, nptyp_to_cl[ntyp]) for nom, ntyp in zip(argnames, types ) ) if types \
                       else dict( (a, None) for a in argnames )
 
     declarations = {}
@@ -379,14 +383,12 @@ def function_to_kernel( f, types, bindings=None ):
     result_typ = declarations['res_g']
     del declarations['res_g']
 
-    cl_typ = type_mapping[ np.dtype(result_typ) ]
-
-    sigs = ["__global const %s *%s" % ( type_mapping[ np.dtype(typ) ], aname) for typ,aname in zip(types,argnames)] \
+    sigs = ["__global const %s *%s" % ( nptyp_to_cl[ntyp], aname) for ntyp,aname in zip(types,argnames)] \
            if types else ["__global const float *%s" % aname for aname in argnames]
-    sigs.append( '__global %s *res_g' % cl_typ)
+    sigs.append( '__global %s *res_g' % result_typ)
 
     input_sig =  ', '.join(sigs)
-    decl = '\n'.join( '%s %s;' % (type_mapping[ np.dtype(typ) ], nom) for nom, typ in declarations.items())
+    decl = '\n'.join( '%s %s;' % (typ, nom) for nom, typ in declarations.items())
 
     kernel = """
 

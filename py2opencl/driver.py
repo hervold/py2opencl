@@ -5,7 +5,7 @@ wrapper around PyOpenCL and py2opencl Python -> OpenCL conversion utility
 import pyopencl as cl
 import numpy as np
 
-from .convert import lambda_to_kernel, type_mapping, rev_mapping
+from .convert import lambda_to_kernel, nptyp_to_cl, cltyp_to_np
 
 import os
 os.environ['PYOPENCL_COMPILER_OUTPUT']='1'
@@ -51,7 +51,7 @@ class Py2OpenCL(object):
                 assert len(a) == length
 
         self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
-        return_typ = rev_mapping[cl_return_typ]
+        return_typ = cltyp_to_np[cl_return_typ]
 
         assert self.argnames and len(self.argnames) == len(arrays)
 

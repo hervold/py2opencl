@@ -96,7 +96,7 @@ def main():
     conv = Py2OpenCL( lambda x: int(x) )
     print conv.kernel
     print '-- float: -> int:', conv.map( 1000 * arr )
-    print "*\n*\n*\n*"
+
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
 
@@ -108,15 +108,15 @@ def main():
             dest[i] = F.sin(x)
 
     _a = Py2OpenCL( f ).map( arr )
+    a = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x) ).map( arr )
 
-    lmb = lambda x: -x if x < 0.5 else F.sin(x)
-
+    print "func:", _a[:10]
     before = time.time()
-    py2 = Py2OpenCL( lmb )
-    ctx = py2.ctx
-    a = py2.map( arr )
+    print "lambda:", a[:10]
 
-    assert (_a == a).all()
+    print max(a - _a)
+
+    assert abs( max(_a - a) ) < 1e-6
 
     print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
     # b = lmb( arr )  # conditionals don't work this way in Numpy
@@ -126,17 +126,19 @@ def main():
     print "max delta: %.2e\n" % np.max(a - b)
 
     before = time.time()
-    a = Py2OpenCL( lambda x: F.atanpi(x), context=ctx ).map( arr )
+    a = Py2OpenCL( lambda x: F.atanpi(x) ).map( arr )
     print "arctan(x) / pi - openCL: for %d elements, took" % len(a), time.time() - before
     before = time.time()
     b = (lambda x: F.atanpi(x) / np.pi)( arr )
     print "arctan(x) / pi - numpy: for %d elements, took" % len(a), time.time() - before
 
+    lmb = lambda x: -x if x < 0.5 else F.sin(x)
+
     for n in (100, 10000, 1000000, 10000000):
         rnd = np.random.rand(n).astype(np.float32)
 
         before = time.time()
-        res_np = Py2OpenCL( lmb, context=ctx ).map( rnd )
+        res_np = Py2OpenCL( lmb ).map( rnd )
         print "Simple tertiary operator case - OpenCL: for %d elements, took" % len(rnd), time.time() - before
 
         before = time.time()
@@ -144,7 +146,7 @@ def main():
         print "Simple tertiary operator case - Python: for %d elements, took" % len(rnd), time.time() - before
 
     import math
-    two = Py2OpenCL( lambda x, y: x + y, context=ctx )
+    two = Py2OpenCL( lambda x, y: x + yx )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 
@@ -156,7 +158,7 @@ def main():
         print "Simple sum - numpy (size=1e%s):" % math.log10(size), time.time() - before
         print "max delta: %.2e\n" % np.max(r2 - res)
 
-    two = Py2OpenCL( lambda x, y: x * y, context=ctx )
+    two = Py2OpenCL( lambda x, y: x * y )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 
@@ -169,7 +171,7 @@ def main():
         print "max delta: %.2e\n" % np.max(r2 - res)
 
     print
-    two = Py2OpenCL( lambda x, y: x ** y, context=ctx )
+    two = Py2OpenCL( lambda x, y: x ** y )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 

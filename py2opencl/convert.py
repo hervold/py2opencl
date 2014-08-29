@@ -46,7 +46,6 @@ def verify_apply( func, argtypes ):
     verify that function accepts arg types given
     returns return-type of function
     """
-    print "-- verify_apply:", argtypes
 
     #argtypes = [nptyp_to_cl[t] for t in argtypes]
     matching_ret = None
@@ -87,8 +86,6 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
 
         # requires_declaration, type, string_representation
         argtypes = [symbol_lookup(a)[1] for a,_ in args]
-        print "-- args:", args
-        print "-- argtypes:", argtypes
         return funcname, verify_apply( func, argtypes )
     except AttributeError:
         return funcname, None
@@ -276,7 +273,6 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     """
     @types -- numpy types
     """
-    print "-- lambda"
     # lstrip, b/c there's likely whitespace that WILL get parsed
     src = ast.parse( inspect.getsource( lmb ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
@@ -295,7 +291,7 @@ def lambda_to_kernel( lmb, types, bindings=None ):
         target_name = None
         # returns: requires_declaration, type, string_representation
         if s in declarations:
-            return True, declarations[s], (s + '[gid]')  # requires_declaration=True, b/c it's moot
+            return True, nptyp_to_cl[declarations[s]], (s + '[gid]')  # requires_declaration=True, b/c it's moot
         else:
             # hackiness here:
             target_name = re.match( r'(\w+)\[?', s ).group(1)
@@ -336,7 +332,6 @@ def function_to_kernel( f, types, bindings=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
-    print "-- function"
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 

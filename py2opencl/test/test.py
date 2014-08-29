@@ -94,7 +94,6 @@ def main():
     arr = np.random.rand( int(1e4) )
 
     conv = Py2OpenCL( lambda x: int(x) )
-    print conv.kernel
     print '-- float: -> int:', conv.map( 1000 * arr )
 
     print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
@@ -114,9 +113,7 @@ def main():
     before = time.time()
     print "lambda:", a[:10]
 
-    print max(a - _a)
-
-    assert abs( max(_a - a) ) < 1e-6
+    assert (_a == a).all()
 
     print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
     # b = lmb( arr )  # conditionals don't work this way in Numpy
@@ -146,7 +143,7 @@ def main():
         print "Simple tertiary operator case - Python: for %d elements, took" % len(rnd), time.time() - before
 
     import math
-    two = Py2OpenCL( lambda x, y: x + yx )
+    two = Py2OpenCL( lambda x, y: x + y )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 

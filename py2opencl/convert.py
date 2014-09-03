@@ -318,8 +318,8 @@ __kernel void sum( %(sigs)s ) {
   res_g[gid] = %(body)s;
 }""" % {'sigs': sigs, 'body': kernel_body}
 
-    if USING_BEIGNET:
-        kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+    # some platforms require this, and others complain ...
+    kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
@@ -393,8 +393,8 @@ __kernel void sum( %(sig)s ) {
   %(body)s
 }""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
-    if USING_BEIGNET:
-        kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+    # some platforms require this, and others complain ...
+    kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel

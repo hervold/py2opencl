@@ -13,8 +13,8 @@ simple Python lambdas and functions containing only simple mathematical operatio
 and built-in OpenCL functions.
 
 
-Example
-=======
+Examples
+========
 
 The following code returns a new numpy array holding the results of the lambda function:
 
@@ -87,6 +87,6 @@ TODO
 ====
 
 - support while loops and C-style for loops (ie, 'for i in range(n)')
-- evaluation performance
+- performance writeup
 - on machines w/ multiple GPU drivers, remember selection
 

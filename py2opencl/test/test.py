@@ -52,7 +52,6 @@ def avg_img( img_arr, purepy=False ):
             avg( i, dest, flat_arr )
 
     else:
-        print "-- avg"
         dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
 
     return dest.reshape( (rows, cols, depth) )
@@ -70,34 +69,31 @@ def main():
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
 
     try:
-        img = Image.open( 'XX'+img_path ).convert('RGB') # 3 uint8's per pixel
+        img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
     except IOError:
         # had some trouble keeping the test image in the package
         img = None
-        print "-- couldn't open test image '%s', so skipping that test" % img_path
+        print "-- couldn't open test image '%s'; skipping that test" % img_path
 
     if img:
         img_arr = np.array(img)
 
         before = time.time()
         ocl_result = avg_img( img_arr )
-        print "-- openCL img-avg:", time.time() - before
+        print "openCL img-avg: %.2es" % (time.time() - before)
         before = time.time()
         py_result = avg_img( img_arr, purepy=True )
-        print "-- python img-avg:", time.time() - before
+        print "python img-avg: %.2es" % (time.time() - before)
 
         Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
         Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
-        assert (ocl_result == py_result).all()
+        assert (ocl_result == py_result).all(), 'python and openCL computed different image averages'
 
     arr = np.random.rand( int(1e4) )
 
-    conv = Py2OpenCL( lambda x: int(x) )
-    print '-- float: -> int:', conv.map( 1000 * arr )
-
-    print '-- int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
-
+    print 'float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
+    print 'int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
     def f( i, dest, src ):
         x = src[i]
@@ -109,11 +105,9 @@ def main():
     _a = Py2OpenCL( f ).map( arr )
     a = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x) ).map( arr )
 
-    print "func:", _a[:10]
     before = time.time()
-    print "lambda:", a[:10]
 
-    assert (_a == a).all()
+    assert (_a == a).all(), 'Lambda and function versions computed different results??'
 
     print "sine - OpenCL: for %d elements, took" % len(a), time.time() - before
     # b = lmb( arr )  # conditionals don't work this way in Numpy
@@ -124,10 +118,10 @@ def main():
 
     before = time.time()
     a = Py2OpenCL( lambda x: F.atanpi(x) ).map( arr )
-    print "arctan(x) / pi - openCL: for %d elements, took" % len(a), time.time() - before
+    print "arctan(x) / pi - openCL: for %d elements, took %.2es" % (len(a), time.time() - before)
     before = time.time()
     b = (lambda x: F.atanpi(x) / np.pi)( arr )
-    print "arctan(x) / pi - numpy: for %d elements, took" % len(a), time.time() - before
+    print "arctan(x) / pi - numpy: for %d elements, took %.2es" % (len(a), time.time() - before)
 
     lmb = lambda x: -x if x < 0.5 else F.sin(x)
 
@@ -136,11 +130,12 @@ def main():
 
         before = time.time()
         res_np = Py2OpenCL( lmb ).map( rnd )
-        print "Simple tertiary operator case - OpenCL: for %d elements, took" % len(rnd), time.time() - before
+        print "Simple tertiary operator case - OpenCL: for %d elements, took %.2es" % (len(rnd), time.time() - before)
 
         before = time.time()
         py = map( lmb, rnd )
-        print "Simple tertiary operator case - Python: for %d elements, took" % len(rnd), time.time() - before
+        print "Simple tertiary operator case - Python: for %d elements, took %.2es" % (len(rnd), time.time() - before)
+        print
 
     import math
     two = Py2OpenCL( lambda x, y: x + y )
@@ -149,11 +144,11 @@ def main():
 
         before = time.time()
         res = two.map( a, b )
-        print "Simple sum - OpenCL (size=1e%s):" % math.log10(size), time.time() - before
+        print "Simple sum - OpenCL (size=1e%s): %.2es" % (math.log10(size), time.time() - before)
         before = time.time()
         r2 = a + b
-        print "Simple sum - numpy (size=1e%s):" % math.log10(size), time.time() - before
-        print "max delta: %.2e\n" % np.max(r2 - res)
+        print "Simple sum - numpy (size=1e%s) %.2es" % (math.log10(size), time.time() - before)
+        print "  -> max delta: %.2e\n" % np.max(r2 - res)
 
     two = Py2OpenCL( lambda x, y: x * y )
     for size in (1e4, 1e5, 1e6, 1e7):
@@ -161,11 +156,11 @@ def main():
 
         before = time.time()
         res = two.map( a, b )
-        print "Simple multiplication - OpenCL (size=1e%s):" % int(math.log10(size)), time.time() - before
+        print "Simple multiplication - OpenCL (size=1e%s): %.2es" % (int(math.log10(size)), time.time() - before)
         before = time.time()
         r2 = a * b
-        print "Simple multiplication - numpy (size=1e%s):" % int(math.log10(size)), time.time() - before
-        print "max delta: %.2e\n" % np.max(r2 - res)
+        print "Simple multiplication - numpy (size=1e%s): %.2es" % (int(math.log10(size)), time.time() - before)
+        print "  -> max delta: %.2e\n" % np.max(r2 - res)
 
     print
     two = Py2OpenCL( lambda x, y: x ** y )
@@ -174,11 +169,11 @@ def main():
 
         before = time.time()
         res = two.map( a, b )
-        print "Simple exponents - OpenCL (size=1e%s):" % int(math.log10(size)), time.time() - before
+        print "Simple exponents - OpenCL (size=1e%s): %.2es" % (int(math.log10(size)), time.time() - before)
         before = time.time()
         r2 = a ** b
-        print "Simple exponents - numpy (size=1e%s):" % int(math.log10(size)), time.time() - before
-        print "max delta: %.2e\n" % np.max(r2 - res)
+        print "Simple exponents - numpy (size=1e%s): %.2es" % (int(math.log10(size)), time.time() - before)
+        print "  -> max delta: %.2e\n" % np.max(r2 - res)
 
 
 if __name__ == '__main__':

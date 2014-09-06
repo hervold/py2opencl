@@ -71,7 +71,9 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
 
     if not modname and funcname == 'int':
         # FIXME: should we check the type of args?  also, need we worry about the return type required
-        return 'convert_int_rtz', 'int'
+        #return 'convert_int_rtz', 'int'
+        return lambda s: '__builtin_convert(%s, int, __kDefaultRoundingMode, __kUnsaturated )' % s, 'int'
+
     if not modname and funcname == 'float':
         return 'convert_double', 'double'
 
@@ -224,8 +226,11 @@ def conv( el, symbol_lookup, declarations=None ):
         args = map( _conv, el.findall('./args/_list_element') )
         funcname, typ = special_funcs( module, funcname,  symbol_lookup, args )
 
-        # FIXME: problem here is that args could easily be a more complex expression ...
-        return '%s( %s )' % (funcname, ', '.join(a for a,t in args)), typ
+        if isinstance(funcname, basestring):
+            # FIXME: problem here is that args could easily be a more complex expression ...
+            return '%s( %s )' % (funcname, ', '.join(a for a,t in args)), typ
+
+        return funcname(', '.join(a for a,t in args)), typ
 
     if name == 'Assign':
         [target] = el.findall('./targets/_list_element')
@@ -319,7 +324,10 @@ __kernel void sum( %(sigs)s ) {
 }""" % {'sigs': sigs, 'body': kernel_body}
 
     # some platforms require this, and others complain ...
-    kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+    kernel = """
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+#define __PTX__ 1
+\n""" + kernel
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
@@ -394,10 +402,16 @@ __kernel void sum( %(sig)s ) {
 }""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
     # some platforms require this, and others complain ...
-    kernel = "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n" + kernel
+    kernel = """
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+#define __PTX__ 1
+\n""" + kernel
+
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
+
+    print kernel
 
     return (argnames, kernel, result_typ)
 

@@ -90,9 +90,9 @@ def main():
 
         assert (ocl_result == py_result).all(), 'python and openCL computed different image averages'
 
-    arr = np.random.rand( int(1e4) )
+    arr = np.random.rand( int(1e4) ).astype('float32')
 
-    print 'float: -> int:', Py2OpenCL( lambda x: int(x) ).map( 1000 * arr )
+    print 'float: -> int:', Py2OpenCL( lambda x: int(x) ).map( (1000 * arr).astype('float32') )
     print 'int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
 
     def f( i, dest, src ):

@@ -71,11 +71,10 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
 
     if not modname and funcname == 'int':
         # FIXME: should we check the type of args?  also, need we worry about the return type required
-        #return 'convert_int_rtz', 'int'
-        return lambda s: '__builtin_convert(%s, int, __kDefaultRoundingMode, __kUnsaturated )' % s, 'int'
+        return 'convert_int_rtz', 'int'
 
     if not modname and funcname == 'float':
-        return 'convert_double', 'double'
+        return 'convert_float', 'float'
 
     # FIXME: enforce args
     import importlib
@@ -318,15 +317,15 @@ def lambda_to_kernel( lmb, types, bindings=None ):
 
     kernel = """
 
-__kernel void sum( %(sigs)s ) {
-  int gid = get_global_id(0);
+kernel void sum( %(sigs)s ) {
+  size_t gid = get_global_id(0);
   res_g[gid] = %(body)s;
 }""" % {'sigs': sigs, 'body': kernel_body}
 
     # some platforms require this, and others complain ...
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
-#define __PTX__ 1
+
 \n""" + kernel
 
     if bindings is None:
@@ -404,14 +403,11 @@ __kernel void sum( %(sig)s ) {
     # some platforms require this, and others complain ...
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
-#define __PTX__ 1
 \n""" + kernel
 
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
-
-    print kernel
 
     return (argnames, kernel, result_typ)
 

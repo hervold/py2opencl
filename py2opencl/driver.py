@@ -18,11 +18,21 @@ class Py2OpenCL(object):
     queue = None
     prog = None
     bindings = None
-    def __init__(self, lmb, context=None, bindings=None):
+    user_dev_selection = None
+    def __init__(self, lmb, prompt=False, user_dev_selection=None, bindings=None):
         """
         """
-        self.ctx = context if context \
-                   else cl.create_some_context()
+	assert not (prompt and user_dev_selection), "Can't ask for @prompt and provide @user_dev_selection at the same time"
+	self.user_dev_selection = user_dev_selection
+
+	if prompt:
+	    self.user_dev_selection = self.init()
+
+	if self.user_dev_selection:
+            self.ctx = cl.create_some_context( interactive=False, answers=self.user_dev_selection )
+	else:
+	    self.ctx = cl.create_some_context()
+
         self.queue = cl.CommandQueue(self.ctx)
         self.bindings = bindings
         self.lmb = lmb
@@ -39,16 +49,17 @@ class Py2OpenCL(object):
         """
         length, types = None, []
         for a in arrays:
-            try:
-                types.append( a.dtype )
-            except KeyError:
-                raise ValueError("invalid numpy type: "+str(a.dtype))
+            types.append( a.dtype )
 
             if length is None:
                 length = len(a)
             else:
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
+
+        for t in sorted(set(types)):
+            assert self.ctx.devices[0].__getattribute__('preferred_vector_width_' + nptyp_to_cl[t]), \
+                "unsupported type on this platform:: numpy:%s openCL:%s" % (t,nptyp_to_cl[t])
 
         self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
         return_typ = cltyp_to_np[cl_return_typ]
@@ -57,6 +68,7 @@ class Py2OpenCL(object):
 
         # compile openCL
         self.prog = cl.Program(self.ctx, self._kernel).build()
+
 
         mf = cl.mem_flags
         res_np = np.zeros( len(arrays[0]), dtype=return_typ )
@@ -73,4 +85,66 @@ class Py2OpenCL(object):
         cl.enqueue_copy( self.queue, res_np, buffs[-1] )
         return res_np.copy()
 
+    def init(self):
+	"""
+	optional helper method that records user responses about platform for later use
 
+    #FIXME: cut & paste from pyopencl/__init__.py follows; will need some modification ...
+
+    platforms = get_platforms()
+
+    if not platforms:
+        raise Error("no platforms found")
+    elif len(platforms) == 1:
+        platform, = platforms
+    else:
+            cc_print("Choose platform:")
+            for i, pf in enumerate(platforms):
+                cc_print("[%d] %s" % (i, pf))
+
+        answer = get_input("Choice [0]:")
+        if not answer:
+            platform = platforms[0]
+        else:
+            platform = None
+            try:
+                int_choice = int(answer)
+            except ValueError:
+                pass
+            else:
+                if 0 <= int_choice < len(platforms):
+                    platform = platforms[int_choice]
+
+    devices = platform.get_devices()
+
+    def parse_device(choice):
+        try:
+            int_choice = int(choice)
+        except ValueError:
+            pass
+        else:
+            if 0 <= int_choice < len(devices):
+                return devices[int_choice]
+
+        choice = choice.lower()
+        for i, dev in enumerate(devices):
+            if choice in dev.name.lower():
+                return dev
+        raise RuntimeError("input did not match any device")
+
+    if not devices:
+        raise Error("no devices found")
+    elif len(devices) == 1:
+        pass
+    else:
+        if not answers:
+            cc_print("Choose device(s):")
+            for i, dev in enumerate(devices):
+                cc_print("[%d] %s" % (i, dev))
+
+        answer = get_input("Choice, comma-separated [0]:")
+        if not answer:
+            devices = [devices[0]]
+        else:
+            devices = [parse_device(i) for i in answer.split(",")]
+"""

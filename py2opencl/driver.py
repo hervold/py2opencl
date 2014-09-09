@@ -58,8 +58,11 @@ class Py2OpenCL(object):
                 assert len(a) == length
 
         for t in sorted(set(types)):
-            assert self.ctx.devices[0].__getattribute__('preferred_vector_width_' + nptyp_to_cl[t]), \
-                "unsupported type on this platform:: numpy:%s openCL:%s" % (t,nptyp_to_cl[t])
+            try:
+                assert self.ctx.devices[0].__getattribute__('preferred_vector_width_' + nptyp_to_cl[t]), \
+                    "unsupported type on this platform:: numpy:%s openCL:%s" % (t,nptyp_to_cl[t])
+            except AttributeError:
+                pass
 
         self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
         return_typ = cltyp_to_np[cl_return_typ]
@@ -88,63 +91,56 @@ class Py2OpenCL(object):
     def init(self):
 	"""
 	optional helper method that records user responses about platform for later use
+        """
+        answers = []
+        platforms = get_platforms()
 
-    #FIXME: cut & paste from pyopencl/__init__.py follows; will need some modification ...
-
-    platforms = get_platforms()
-
-    if not platforms:
-        raise Error("no platforms found")
-    elif len(platforms) == 1:
-        platform, = platforms
-    else:
-            cc_print("Choose platform:")
-            for i, pf in enumerate(platforms):
-                cc_print("[%d] %s" % (i, pf))
-
-        answer = get_input("Choice [0]:")
-        if not answer:
-            platform = platforms[0]
+        if not platforms:
+            raise Error("no platforms found")
+        elif len(platforms) == 1:
+            platform, = platforms
         else:
+            print "Choose platform:"
+            for i, pf in enumerate(platforms):
+                print "[%d] %s" % (i, pf)
+
+        print "Choice [0]:"
+        answer = raw_input()
+
+        if answer:
             platform = None
             try:
                 int_choice = int(answer)
             except ValueError:
-                pass
+                int_choice = 0
+            if 0 <= int_choice < len(platforms):
+                platform = platforms[int_choice]
             else:
-                if 0 <= int_choice < len(platforms):
-                    platform = platforms[int_choice]
-
-    devices = platform.get_devices()
-
-    def parse_device(choice):
-        try:
-            int_choice = int(choice)
-        except ValueError:
-            pass
+                raise ValueError("don't recognize platform %d" % int_choice)
         else:
-            if 0 <= int_choice < len(devices):
-                return devices[int_choice]
+            platform, int_choice = platforms[0], 0
 
-        choice = choice.lower()
-        for i, dev in enumerate(devices):
-            if choice in dev.name.lower():
-                return dev
-        raise RuntimeError("input did not match any device")
+        answers.append( str(int_choice) )
 
-    if not devices:
-        raise Error("no devices found")
-    elif len(devices) == 1:
-        pass
-    else:
-        if not answers:
-            cc_print("Choose device(s):")
+        devices = platform.get_devices()
+
+        if len(devices) == 1:
+            answer = 0
+        else:
+            print "Choose device(s):"
             for i, dev in enumerate(devices):
-                cc_print("[%d] %s" % (i, dev))
+                print "[%d] %s" % (i, dev)
 
-        answer = get_input("Choice, comma-separated [0]:")
-        if not answer:
-            devices = [devices[0]]
-        else:
-            devices = [parse_device(i) for i in answer.split(",")]
-"""
+            print "Choice, comma-separated [0]:"
+            answer = raw_input()
+            if answer:
+                try:
+                    if 0 <= int(answer) <= len(devices):
+                        answers.append( answer )
+                    else:
+                        raise ValueError("didn't recognize device "+answer)
+                except ValueError:
+                    answers.append('0')
+            else:
+                answers.append('0')
+

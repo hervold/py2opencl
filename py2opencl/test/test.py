@@ -92,8 +92,10 @@ def main():
 
     arr = np.random.rand( int(1e4) ).astype('float32')
 
-    print 'float: -> int:', Py2OpenCL( lambda x: int(x) ).map( (1000 * arr).astype('float32') )
-    print 'int -> float:', Py2OpenCL( lambda x: float(x) ).map( (1000 * arr).astype('int32') )
+    f2i = Py2OpenCL( lambda x: int(x), prompt=True )
+    dev = f2i.user_dev_selection
+    print 'float: -> int:', f2i.map( (1000 * arr).astype('float32') )
+    print 'int -> float:', Py2OpenCL( lambda x: float(x), user_dev_selection=dev ).map( (1000 * arr).astype('int32') )
 
     def f( i, dest, src ):
         x = src[i]
@@ -102,8 +104,8 @@ def main():
         else:
             dest[i] = F.sin(x)
 
-    _a = Py2OpenCL( f ).map( arr )
-    a = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x) ).map( arr )
+    _a = Py2OpenCL( f, user_dev_selection=dev ).map( arr )
+    a = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x), user_dev_selection=dev ).map( arr )
 
     before = time.time()
 
@@ -117,7 +119,7 @@ def main():
     print "max delta: %.2e\n" % np.max(a - b)
 
     before = time.time()
-    a = Py2OpenCL( lambda x: F.atanpi(x) ).map( arr )
+    a = Py2OpenCL( lambda x: F.atanpi(x), user_dev_selection=dev ).map( arr )
     print "arctan(x) / pi - openCL: for %d elements, took %.2es" % (len(a), time.time() - before)
     before = time.time()
     b = (lambda x: F.atanpi(x) / np.pi)( arr )
@@ -129,7 +131,7 @@ def main():
         rnd = np.random.rand(n).astype(np.float32)
 
         before = time.time()
-        res_np = Py2OpenCL( lmb ).map( rnd )
+        res_np = Py2OpenCL( lmb, user_dev_selection=dev ).map( rnd )
         print "Simple tertiary operator case - OpenCL: for %d elements, took %.2es" % (len(rnd), time.time() - before)
 
         before = time.time()
@@ -138,7 +140,7 @@ def main():
         print
 
     import math
-    two = Py2OpenCL( lambda x, y: x + y )
+    two = Py2OpenCL( lambda x, y: x + y, user_dev_selection=dev )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 
@@ -150,7 +152,7 @@ def main():
         print "Simple sum - numpy (size=1e%s) %.2es" % (math.log10(size), time.time() - before)
         print "  -> max delta: %.2e\n" % np.max(r2 - res)
 
-    two = Py2OpenCL( lambda x, y: x * y )
+    two = Py2OpenCL( lambda x, y: x * y, user_dev_selection=dev )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 
@@ -163,7 +165,7 @@ def main():
         print "  -> max delta: %.2e\n" % np.max(r2 - res)
 
     print
-    two = Py2OpenCL( lambda x, y: x ** y )
+    two = Py2OpenCL( lambda x, y: x ** y, user_dev_selection=dev )
     for size in (1e4, 1e5, 1e6, 1e7):
         a, b = np.random.rand(int(1e7)).astype(np.float32), np.random.rand(int(1e7)).astype(np.float32)
 

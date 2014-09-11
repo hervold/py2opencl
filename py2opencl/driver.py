@@ -26,12 +26,11 @@ class Py2OpenCL(object):
 	self.user_dev_selection = user_dev_selection
 
 	if prompt:
-	    self.user_dev_selection = self.init()
+	    self.user_dev_selection = ['0'] if Py2OpenCL.only_one_device() \
+		else self.init()
 
-	if self.user_dev_selection:
-            self.ctx = cl.create_some_context( interactive=False, answers=self.user_dev_selection )
-	else:
-	    self.ctx = cl.create_some_context()
+        self.ctx = cl.create_some_context( interactive=False, answers=self.user_dev_selection ) \
+		if self.user_dev_selection else cl.create_some_context()
 
         self.queue = cl.CommandQueue(self.ctx)
         self.bindings = bindings
@@ -88,39 +87,33 @@ class Py2OpenCL(object):
         cl.enqueue_copy( self.queue, res_np, buffs[-1] )
         return res_np.copy()
 
+    @staticmethod
+    def only_one_device():
+	p = cl.get_platforms()
+ 	return len(p) == 1 and len(p[0].get_devices()) == 1
+
     def init(self):
 	"""
 	optional helper method that records user responses about platform for later use
         """
         answers = []
-        platforms = get_platforms()
+        platforms = cl.get_platforms()
 
         if not platforms:
             raise Error("no platforms found")
         elif len(platforms) == 1:
-            platform, = platforms
+            [platform] = platforms
         else:
             print "Choose platform:"
             for i, pf in enumerate(platforms):
                 print "[%d] %s" % (i, pf)
 
-        print "Choice [0]:"
-        answer = raw_input()
-
-        if answer:
-            platform = None
-            try:
-                int_choice = int(answer)
-            except ValueError:
-                int_choice = 0
-            if 0 <= int_choice < len(platforms):
+            print "Choice [0]:",
+            int_choice = int( raw_input() )
+	    if 0 <= int_choice < len(platforms):
                 platform = platforms[int_choice]
-            else:
-                raise ValueError("don't recognize platform %d" % int_choice)
-        else:
-            platform, int_choice = platforms[0], 0
 
-        answers.append( str(int_choice) )
+            answers.append( str(int_choice) )
 
         devices = platform.get_devices()
 
@@ -131,7 +124,7 @@ class Py2OpenCL(object):
             for i, dev in enumerate(devices):
                 print "[%d] %s" % (i, dev)
 
-            print "Choice, comma-separated [0]:"
+            print "Choice, comma-separated [0]:",
             answer = raw_input()
             if answer:
                 try:
@@ -143,4 +136,4 @@ class Py2OpenCL(object):
                     answers.append('0')
             else:
                 answers.append('0')
-
+	return answers

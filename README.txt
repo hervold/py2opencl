@@ -82,11 +82,18 @@ I'd suggest AMD's ICD, found `here http://developer.amd.com/tools-and-sdks/openc
 As of this writing, Intel's beignet driver appears to be broken on Ubuntu 14.04.
 
 
+Tested Platforms
+================
+
+- NVIDIA CUDA / nvidia-opencl-icd-331 on Ubuntu 14.04
+- AMD Accelerated Parallel Processing (AMD-APP-SDK-v2.9) on Intel Core i7-3610QM, Ubuntu 14.04
+- Apple's OpenCL drivers for the Intel Core i5-4258U, OS X 10.9
+- Apple's OpenCL drivers for the Intel "Iris" (Intel HD 4000), OS X 10.9
+
 
 TODO
 ====
 
 - support while loops and C-style for loops (ie, 'for i in range(n)')
 - performance writeup
-- on machines w/ multiple GPU drivers, remember selection
 

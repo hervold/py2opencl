@@ -145,7 +145,7 @@ def conv( el, symbol_lookup, declarations=None ):
 
     if name == 'BoolOp':
 	[op] = el.findall('./op')
-	operands = [_conv(x) for x in el.findall('./values/_list_element')]
+	operands = [_conv(x)[0] for x in el.findall('./values/_list_element')]
         return '(%s)' % ({'And': ' && ', 'Or': ' || '}[op.get('_name')]).join( operands ), 'bool'
 
     if name == 'UnaryOp':
@@ -273,7 +273,7 @@ def pprint( s ):
     return xml.dom.minidom.parseString( s ).toprettyxml()
 
 
-def lambda_to_kernel( lmb, types, bindings=None ):
+def lambda_to_kernel( lmb, types, bindings=None, return_type=None ):
     """
     @types -- numpy types
     """
@@ -282,7 +282,7 @@ def lambda_to_kernel( lmb, types, bindings=None ):
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
     if not root.findall(".//*[@_name='Lambda']"):
-        return function_to_kernel( lmb, types, bindings )
+        return function_to_kernel( lmb, types, bindings, return_type=return_type )
 
     [func] = root.findall(".//*[@_name='Lambda']")
     # argnames are used to (1) determine order of input matrices, and (2) enforce namespace
@@ -335,7 +335,7 @@ kernel void sum( %(sigs)s ) {
 
 
 
-def function_to_kernel( f, types, bindings=None ):
+def function_to_kernel( f, types, bindings=None, return_type=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
@@ -359,7 +359,7 @@ def function_to_kernel( f, types, bindings=None ):
             return False, None, 'gid'
 
         if s == results_name or s == 'res_g':
-            return True, None, 'res_g'
+            return True, return_type, 'res_g'
 
         if argname_to_type:
             if s in argname_to_type:

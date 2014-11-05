@@ -22,7 +22,7 @@ def avg_img_files( src_path, dest_path ):
 
 
 
-def avg_img( img_arr, purepy=False ):
+def avg_img( img_arr, purepy=False, user_dev_selection=None ):
     """
     load an image and set each pixel to the avg of its cardinal neighbors
     """
@@ -52,7 +52,7 @@ def avg_img( img_arr, purepy=False ):
             avg( i, dest, flat_arr )
 
     else:
-        dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
+        dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth}, user_dev_selection=user_dev_selection ).map( flat_arr )
 
     return dest.reshape( (rows, cols, depth) )
 
@@ -60,26 +60,28 @@ def avg_img( img_arr, purepy=False ):
 def main():
 
     raised_expected = False
+
+    s = Py2OpenCL( lambda x: F.sin( x ), prompt=True )
+    dev = s.user_dev_selection
     try:
-        _ = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )).astype('int64') )
+        s.map( (100 * np.random.rand( int(1e3) )).astype('int64') )
     except TypeError:
-        raised_expected = True
-    assert raised_expected
+        # we expect to get this exception
+        pass
+    else:
+        raise Exception("sin shouldn't accept ints")
 
     img_path = os.path.join( os.path.dirname(test_directory), 'Lenna.png') 
-
     try:
         img = Image.open( img_path ).convert('RGB') # 3 uint8's per pixel
     except IOError:
         # had some trouble keeping the test image in the package
-        img = None
         print "-- couldn't open test image '%s'; skipping that test" % img_path
-
-    if img:
+    else:
         img_arr = np.array(img)
 
         before = time.time()
-        ocl_result = avg_img( img_arr )
+        ocl_result = avg_img( img_arr, user_dev_selection=dev )
         print "openCL img-avg: %.2es" % (time.time() - before)
         before = time.time()
         py_result = avg_img( img_arr, purepy=True )
@@ -92,9 +94,7 @@ def main():
 
     arr = np.random.rand( int(1e4) ).astype('float32')
 
-    f2i = Py2OpenCL( lambda x: int(x), prompt=True )
-    dev = f2i.user_dev_selection
-    print 'float: -> int:', f2i.map( (1000 * arr).astype('float32') )
+    print 'float: -> int:', Py2OpenCL( lambda x: int(x), user_dev_selection=dev ).map( (1000 * arr).astype('float32') )
     print 'int -> float:', Py2OpenCL( lambda x: float(x), user_dev_selection=dev ).map( (1000 * arr).astype('int32') )
 
     def f( i, dest, src ):

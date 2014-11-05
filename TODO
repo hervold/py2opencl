@@ -1,3 +1,23 @@
+- add support for 2D arrays
+- add support for 2D subscripts
+
+example:
+
+  def f( i, j, dest, src ):
+      dest[i,j] = src[i,j] \
+            if src[i,j+1] > src[i,j] \
+            else src[i,j+1]
+
+      a = numpy.random.randint(0, 10, size=(100,100))
+      cl = Py2OpenCL( f )
+      cl.bind( a )
+      print cl.kernel
+      b = cl.apply()
+
+note that kernel can't be generated before we .bind to a 2D array, b/c we need the
+dimensions of the array in order to implement 2d subscripting.
+
+
  - test on various drivers (AMD, Nvidia, Intel)
  - where > 1 driver exists, persist choice
  - Expand beyond lambdas in order to support, eg,
@@ -12,3 +32,5 @@
     + closures are currently supported via a @bindings parameter b/c
       the namespace of the function isn't accessible via inspect()
       this is probably unfixable
+
+ - maybe experiment w/ CFFI?  https://cffi.readthedocs.org/en/release-0.8/

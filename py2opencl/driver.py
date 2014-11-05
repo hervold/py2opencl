@@ -19,6 +19,7 @@ class Py2OpenCL(object):
     prog = None
     bindings = None
     user_dev_selection = None
+
     def __init__(self, lmb, prompt=False, user_dev_selection=None, bindings=None):
         """
         """
@@ -26,7 +27,7 @@ class Py2OpenCL(object):
 	self.user_dev_selection = user_dev_selection
 
 	if prompt:
-	    self.user_dev_selection = ['0'] if Py2OpenCL.only_one_device() \
+	    self.user_dev_selection = None if Py2OpenCL.only_one_device() \
 		else self.init()
 
         self.ctx = cl.create_some_context( interactive=False, answers=self.user_dev_selection ) \
@@ -40,14 +41,16 @@ class Py2OpenCL(object):
     def kernel(self):
         return lambda_to_kernel( self.lmb, None, bindings=self.bindings )[1]
 
-    def map(self, *arrays ):
+    def bind(self, *arrays, **kw ):
         """
         verify types and number of numpy arrays, then compile kernel.
 
         note that kernel can't be generated until we know the types involved.
         """
+        self.arrays = arrays
+
         length, types = None, []
-        for a in arrays:
+        for a in self.arrays:
             types.append( a.dtype )
 
             if length is None:
@@ -58,39 +61,55 @@ class Py2OpenCL(object):
 
         for t in sorted(set(types)):
             try:
-                assert self.ctx.devices[0].__getattribute__('preferred_vector_width_' + nptyp_to_cl[t]), \
+                assert self.ctx.devices[0].__getattribute__('preferred_vector_width_'+nptyp_to_cl[t]), \
                     "unsupported type on this platform:: numpy:%s openCL:%s" % (t,nptyp_to_cl[t])
             except AttributeError:
                 pass
 
-        self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types, bindings=self.bindings )
-        return_typ = cltyp_to_np[cl_return_typ]
-
-        assert self.argnames and len(self.argnames) == len(arrays)
+        self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types,
+                                                                       bindings=self.bindings,
+                                                                       return_type=kw.get('return_type'))
+        self.return_typ = cltyp_to_np[cl_return_typ]
+        assert self.argnames and len(self.argnames) == len(self.arrays)
 
         # compile openCL
         self.prog = cl.Program(self.ctx, self._kernel).build()
 
 
+    def apply(self, *new_arrays):
+        """
+        executes kernel against arguments previously bound to self via bind method
+
+        new arguments can be supplied in order to avoid re-generation of the kernel for repeated use,
+        but they MUST match the type and shape of the initially bound arguments
+        """
+        if new_arrays:
+            self.arrays = new_arrays
+
         mf = cl.mem_flags
-        res_np = np.zeros( len(arrays[0]), dtype=return_typ )
+        res_np = np.zeros( shape=self.arrays[0].shape, dtype=self.return_typ )
 
         buffs = [ cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=arr )
-                  for arr in arrays ]
-
+                  for arr in self.arrays ]
         # results:
         buffs.append( cl.Buffer(self.ctx, mf.WRITE_ONLY, res_np.nbytes) )
-
         # run!
-        self.prog.sum(self.queue, arrays[0].shape, None, *buffs)
+        self.prog.sum(self.queue, self.arrays[0].shape, None, *buffs)
 
         cl.enqueue_copy( self.queue, res_np, buffs[-1] )
         return res_np.copy()
+
+
+    def map(self, *arrays, **kw ):
+        self.bind( *arrays, **kw )
+        return self.apply()
+
 
     @staticmethod
     def only_one_device():
 	p = cl.get_platforms()
  	return len(p) == 1 and len(p[0].get_devices()) == 1
+
 
     def init(self):
 	"""

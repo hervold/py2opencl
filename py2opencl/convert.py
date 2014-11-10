@@ -92,6 +92,25 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
         return funcname, None
 
 
+def conv_subscr( el, symbol_lookup,  declarations ):
+    """
+    special case: tuple subscripts (ie, x[i,j]) are 
+    """
+    [sub] = el.findall("./value")
+    name = sub.get('_name')
+    if name == 'Name':
+        return conv( sub, symbol_lookup,  declarations )
+    elif name == 'Tuple':
+        l = [conv( x, symbol_lookup,  declarations ) for x in sub.findall('./elts/_list_element')]
+        args = ','.join( a for a,_ in l )
+        if len(l) == 2:
+            return 'FLATTEN2( %s )' % args, 'int'
+        elif len(l) == 3:
+            return 'FLATTEN3( %s )' % args, 'int'
+        else:
+            raise ValueError("can't flatten %d arguments" % len(l))
+
+
 def conv( el, symbol_lookup, declarations=None ):
     """
     returns <openCL-C string representation>, <openCL type>
@@ -107,8 +126,8 @@ def conv( el, symbol_lookup, declarations=None ):
         raise ValueError('%s is not int' % s)
 
     # symbol_lookup returns: requires_declaration, type, string_representation
-    def _conv( el ):
-        return conv( el, symbol_lookup,  declarations)
+    _conv = lambda el: conv( el, symbol_lookup,  declarations)
+    _conv_subscr = lambda el: conv_subscr( el, symbol_lookup,  declarations )
 
     def cpow( left_el, right_el ):
         (lval, ltyp), (rval, rtyp) =  (_conv(left_el), _conv(right_el))
@@ -248,11 +267,12 @@ def conv( el, symbol_lookup, declarations=None ):
 
         return '%s = %s;' % (target, operand), typ
 
+
     if name == 'Subscript':
         [name] = el.findall('./value')
         [subscr] = el.findall('./slice')
         val, typ = _conv(name)
-        sval, styp = _conv(subscr)
+        sval, styp = _conv_subscr(subscr)
         return '%s[%s]' % (val, sval), typ
 
     if name == 'Index':
@@ -273,8 +293,11 @@ def pprint( s ):
     return xml.dom.minidom.parseString( s ).toprettyxml()
 
 
-def lambda_to_kernel( lmb, types, bindings=None, return_type=None ):
+def function_to_kernel( lmb, types, shape, bindings=None, return_type=None ):
     """
+    NOTE: method to convery python lambda to an OpenCL kernel; delegates conversion
+    of proper function to `full_function_to_kernel`
+
     @types -- numpy types
     """
     # lstrip, b/c there's likely whitespace that WILL get parsed
@@ -282,7 +305,7 @@ def lambda_to_kernel( lmb, types, bindings=None, return_type=None ):
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
     if not root.findall(".//*[@_name='Lambda']"):
-        return function_to_kernel( lmb, types, bindings, return_type=return_type )
+        return full_function_to_kernel( lmb, types, shape, bindings, return_type=return_type )
 
     [func] = root.findall(".//*[@_name='Lambda']")
     # argnames are used to (1) determine order of input matrices, and (2) enforce namespace
@@ -335,22 +358,30 @@ kernel void sum( %(sigs)s ) {
 
 
 
-def function_to_kernel( f, types, bindings=None, return_type=None ):
+def full_function_to_kernel( f, types, shape, bindings=None, return_type=None ):
     #####
     # not a lambda, but a traditional function
     # lstrip, b/c there's likely whitespace that WILL get parsed
+
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
+
+    print '@@ types:', types
 
     [func] = root.findall(".//*[@_name='FunctionDef']")
     argnames = [x.get('id') for x in
                 func.findall("./args[@_name='arguments']/args/_list_element[@_name='Name']")]
+    print '@@ argnames:', argnames
+
     assert len(argnames) > 1
-    idx_name = argnames.pop(0)
-    results_name = argnames.pop(0)
+    if len(shape) == 1:
+        idx_name = argnames.pop(0)
+        results_name = argnames.pop(0)
 
     argname_to_type = dict( (nom, nptyp_to_cl[ntyp]) for nom, ntyp in zip(argnames, types ) ) if types \
                       else dict( (a, None) for a in argnames )
+
+    print '@@ argname_to_type:', argname_to_type
 
     declarations = {}
     def symbol_lookup( s ):
@@ -382,6 +413,7 @@ def function_to_kernel( f, types, bindings=None, return_type=None ):
     _, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     # res_g should appear in declarations, as we want to know its inferred type, but we don't actually want to declare it
+    print "@@ declarations:", declarations
     result_typ = declarations['res_g']
     del declarations['res_g']
 

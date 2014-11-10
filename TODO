@@ -1,5 +1,9 @@
-- add support for 2D arrays
-- add support for 2D subscripts
+- add support for 2D & 3D arrays
+- add support for 2D % 3D subscripts
+- add support for len()
+- eliminate need for bindings parameter -- since we now require that arguments
+  be bound() before apply() is called, we know the dimensions of the array
+
 
 example:
 
@@ -27,8 +31,6 @@ dimensions of the array in order to implement 2d subscripting.
     + for and while loops
     + possibly unfixable: python short-circuit and/or, eg, x = foo or 10
       this is syntactically correct in C, but won't work as expected
-    + types aren't supported yet -- everything defaults to float.
-      some minimal type inference is needed
     + closures are currently supported via a @bindings parameter b/c
       the namespace of the function isn't accessible via inspect()
       this is probably unfixable

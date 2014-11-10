@@ -5,7 +5,7 @@ wrapper around PyOpenCL and py2opencl Python -> OpenCL conversion utility
 import pyopencl as cl
 import numpy as np
 
-from .convert import lambda_to_kernel, nptyp_to_cl, cltyp_to_np
+from .convert import function_to_kernel, nptyp_to_cl, cltyp_to_np
 
 import os
 os.environ['PYOPENCL_COMPILER_OUTPUT']='1'
@@ -48,10 +48,11 @@ class Py2OpenCL(object):
         note that kernel can't be generated until we know the types involved.
         """
         self.arrays = arrays
+        self.shape = arrays[0].shape
 
-        length, types = None, []
+        length, self.types = None, []
         for a in self.arrays:
-            types.append( a.dtype )
+            self.types.append( a.dtype )
 
             if length is None:
                 length = len(a)
@@ -59,14 +60,14 @@ class Py2OpenCL(object):
                 # FIXME: this precludes legitimate use-cases ...
                 assert len(a) == length
 
-        for t in sorted(set(types)):
+        for t in sorted(set(self.types)):
             try:
                 assert self.ctx.devices[0].__getattribute__('preferred_vector_width_'+nptyp_to_cl[t]), \
                     "unsupported type on this platform:: numpy:%s openCL:%s" % (t,nptyp_to_cl[t])
             except AttributeError:
                 pass
 
-        self.argnames, self._kernel, cl_return_typ = lambda_to_kernel( self.lmb, types,
+        self.argnames, self._kernel, cl_return_typ = function_to_kernel( self.lmb, self.types, self.shape,
                                                                        bindings=self.bindings,
                                                                        return_type=kw.get('return_type'))
         self.return_typ = cltyp_to_np[cl_return_typ]

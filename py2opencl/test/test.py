@@ -8,7 +8,7 @@ import os.path
 from PIL import Image
 
 from ..driver import Py2OpenCL
-from ..convert import lambda_to_kernel
+from ..convert import function_to_kernel
 from .. import F
 
 from . import __file__ as test_directory
@@ -55,6 +55,27 @@ def avg_img( img_arr, purepy=False, user_dev_selection=None ):
         dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth}, user_dev_selection=user_dev_selection ).map( flat_arr )
 
     return dest.reshape( (rows, cols, depth) )
+
+def avg_img( img_arr, purepy=False, user_dev_selection=None ):
+    def avg( x, y, z, dest, src ):
+        src[x]
+        right = src[ x+1, y, z ]
+        left = src[ x-1, y, z ]
+        up = src[ x, y-1, z ]
+        down[ x, y+1, z ]
+        dest[x,y,z] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
+
+    if purepy:
+        dest = np.empty_like( img_arr )
+
+        z,y,z = img_arr.shape
+        for i in range( x ):
+            for j in range( y ):
+                for k in range( z ):
+                    avg( i, j, k, dest, img_arr )
+    else:
+        dest = Py2OpenCL( avg, user_dev_selection=user_dev_selection ).map( img_arr )
+    return dest
 
 
 def main():

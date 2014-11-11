@@ -23,15 +23,14 @@ The following code returns a new numpy array holding the results of the lambda f
     from py2opencl import Py2OpenCL, F
      
     py2 = Py2OpenCL( lambda x: -x if x < 0.5 else F.sin(x) )
-     
+    a = py2.map( np.random.rand(10000000) )
+
     print py2.kernel
 
     >>  __kernel void sum( __global const float *x, __global float *res_g) {
     >>     int gid = get_global_id(0);
     >>     res_g[gid] = (((x[gid] < 0.5)) ? -x[gid] : sin( x[gid] ));
     >>  }
-     
-    a = py2.map( np.random.rand(10000000) )
 
 
 More complex functions are supported, though there are many constraints.  The following function
@@ -44,32 +43,17 @@ averages the pixels of an image:
     img_path = 'py2opencl/test/Lenna.png'
     
     img = np.array( Image.open( img_path ).convert('RGB') )
-    rows, cols, depth = img.shape
-    flat_arr = img.ravel()
-    rowcount = cols * depth   # of bytes per row
-    totpix = len(flat_arr)
-    
-    def avg( i, dest, src ):
-        """
-        in order to enforce wrap-around, we'll take mod of each coord
-    
-        NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?),
-	so we add an extra @totpix before the mod in order to keep
-        everything > 0
-        """
-        right = src[(totpix + i + depth) % totpix]
-        left = src[(totpix + i - depth) % totpix]
-        up = src[(totpix + i - rowcount) % totpix]
-        down = src[(totpix + i + rowcount) % totpix]
-        # (a + b + ... ) / 4 can cause overflow
-        dest[i] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
+
+    def avg( x, y, z, dest, src ):
+        # note that the C code produced will handle wrapping automatically
+        right = src[ x+1, y, z ]
+        left = src[ x-1, y, z ]
+        up = src[ x, y-1, z ]
+        down = src[ x, y+1, z ]
+        dest[x,y,z] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
      
-     
-    # note that we can't determine external values via introspection
-    dest = Py2OpenCL( avg, bindings={'totpix': totpix,
-                                     'rowcount': rowcount, 'depth': depth} ).map( flat_arr )
-    avg_img = Image.fromarray( dest.reshape( (rows, cols, depth) ), 'RGB')
-    avg_img.save('x.png')
+    dest = Py2OpenCL( avg ).map( img )
+    Image.fromarray( dest, 'RGB').save('foo.png')
 
 
 OpenCL Drivers

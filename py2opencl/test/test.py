@@ -24,42 +24,7 @@ def avg_img_files( src_path, dest_path ):
 
 
 def avg_img( img_arr, purepy=False, user_dev_selection=None ):
-    """
-    load an image and set each pixel to the avg of its cardinal neighbors
-    """
-    # see http://stackoverflow.com/questions/15612373/convert-image-png-to-matrix-and-then-to-1d-array
-    rows, cols, depth = img_arr.shape
-    flat_arr = img_arr.ravel()
-    rowcount = cols * depth   # of bytes per row
-    totpix = len(flat_arr)
-
-    def avg( i, dest, src ):
-        """
-        in order to enforce wrap-around, we'll take mod of each coord
-
-        NOTE: the GID/pointer arithmetic gets a bit tricky (unsigned values?), so we add an extra
-        @totpix before the mod in order to keep everything > 0
-        """
-        right = src[(totpix + i + depth) % totpix]
-        left = src[(totpix + i - depth) % totpix]
-        up = src[(totpix + i - rowcount) % totpix]
-        down = src[(totpix + i + rowcount) % totpix]
-        # (a + b + ... ) / 4 can cause overflow
-        dest[i] = (right / 4) + (left / 4) + (up / 4) + (down / 4)
-
-    if purepy:
-        dest = np.empty_like(flat_arr)
-        for i in range(len(flat_arr)):
-            avg( i, dest, flat_arr )
-
-    else:
-        dest = Py2OpenCL( avg, bindings={'totpix': totpix, 'rowcount': rowcount, 'depth': depth}, user_dev_selection=user_dev_selection ).map( flat_arr )
-
-    return dest.reshape( (rows, cols, depth) )
-
-def avg_img( img_arr, purepy=False, user_dev_selection=None ):
     def avg( x, y, z, dest, src ):
-        src[x]
         right = src[ x+1, y, z ]
         left = src[ x-1, y, z ]
         up = src[ x, y-1, z ]

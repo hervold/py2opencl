@@ -1,31 +1,8 @@
-- add support for 2D & 3D arrays
-- add support for 2D % 3D subscripts
 - add support for len()
-- eliminate need for bindings parameter -- since we now require that arguments
-  be bound() before apply() is called, we know the dimensions of the array
-
-
-example:
-
-  def f( i, j, dest, src ):
-      dest[i,j] = src[i,j] \
-            if src[i,j+1] > src[i,j] \
-            else src[i,j+1]
-
-      a = numpy.random.randint(0, 10, size=(100,100))
-      cl = Py2OpenCL( f )
-      cl.bind( a )
-      print cl.kernel
-      b = cl.apply()
-
-note that kernel can't be generated before we .bind to a 2D array, b/c we need the
-dimensions of the array in order to implement 2d subscripting.
 
 
  - test on various drivers (AMD, Nvidia, Intel)
- - where > 1 driver exists, persist choice
- - Expand beyond lambdas in order to support, eg,
-   this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/
+ - this algo: http://photomonkee.com/blog/2012/03/15/edge-detection-in-opencl/
     + basic conversion seems to work
     + if/then
     + for and while loops

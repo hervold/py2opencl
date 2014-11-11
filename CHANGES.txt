@@ -1,3 +1,4 @@
 v0.1, 2014.07.07 -- Initial release
 v0.2, 2014.08.26 -- added support for functions and preliminary type inference
 v0.3, 2014.09.10 -- type inference works reasonably well, including some checks for platform compatiblity
+v0.4, 2014.11.11 -- added support for multidimensional arrays and conversion of tuple indexing into flat (ie, x[i,j] -> x[(j*WIDTH)+i] )

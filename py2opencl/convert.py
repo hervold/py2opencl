@@ -346,12 +346,10 @@ kernel void sum( %(sigs)s ) {
 }""" % {'sigs': sigs, 'body': kernel_body}
 
     # some platforms require this, and others complain ...
-    '''
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 \n""" + kernel
-    '''
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
@@ -463,11 +461,9 @@ __kernel void sum( %(sig)s ) {
 }""" % {'getters': id_getters, 'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
     # some platforms require this, and others complain ...
-    '''
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 \n""" + kernel
-    '''
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel

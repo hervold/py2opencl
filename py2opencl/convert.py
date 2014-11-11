@@ -273,7 +273,7 @@ def conv( el, symbol_lookup, declarations=None ):
         [subscr] = el.findall('./slice')
         val, typ = _conv(name)
         sval, styp = _conv_subscr(subscr)
-        return '%s[%s]' % (val, sval), typ
+        return '%s[ %s ]' % (val, sval), typ
 
     if name == 'Index':
         [val] = el.findall('./value')
@@ -346,10 +346,12 @@ kernel void sum( %(sigs)s ) {
 }""" % {'sigs': sigs, 'body': kernel_body}
 
     # some platforms require this, and others complain ...
+    '''
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 \n""" + kernel
+    '''
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
@@ -366,28 +368,57 @@ def full_function_to_kernel( f, types, shape, bindings=None, return_type=None ):
     src = ast.parse( inspect.getsource( f ).lstrip() )
     root = ET.fromstring( ast2xml.ast2xml().convert(src) )
 
-    print '@@ types:', types
-
     [func] = root.findall(".//*[@_name='FunctionDef']")
     argnames = [x.get('id') for x in
                 func.findall("./args[@_name='arguments']/args/_list_element[@_name='Name']")]
-    print '@@ argnames:', argnames
 
+    headers = ''
     assert len(argnames) > 1
     if len(shape) == 1:
-        idx_name = argnames.pop(0)
+        id_getters = "size_t gid = get_global_id(0);"
+        idx_names = { argnames.pop(0) : 'gid' }
+        results_name = argnames.pop(0)
+    elif len(shape) == 2:
+        id_getters = """
+size_t gid_x = get_global_id(0);
+size_t gid_y = get_global_id(1);
+"""
+        headers = """
+#define XDIM %d
+#define YDIM %d
+#define TOTSIZE (XDIM * YDIM)
+#define FLATTEN2( i, j ) (TOTSIZE + ((j * XDIM) + i)) %% TOTSIZE
+""" % shape
+        idx_names = { argnames.pop(0): 'gid_x',
+                      argnames.pop(0): 'gid_y'}
+        results_name = argnames.pop(0)
+
+    elif len(shape) == 3:
+        id_getters = """
+size_t gid_x = get_global_id(0);
+size_t gid_y = get_global_id(1);
+size_t gid_z = get_global_id(2);
+"""
+        headers = """
+#define XDIM %d
+#define YDIM %d
+#define ZDIM %d
+#define TOTSIZE (XDIM * YDIM * ZDIM)
+#define FLATTEN3( i, j, k ) ((TOTSIZE + (i * ZDIM) + (j * (XDIM * ZDIM)) + k) %% TOTSIZE)
+""" % shape
+        idx_names = { argnames.pop(0): 'gid_x',
+                      argnames.pop(0): 'gid_y',
+                      argnames.pop(0): 'gid_z'}
         results_name = argnames.pop(0)
 
     argname_to_type = dict( (nom, nptyp_to_cl[ntyp]) for nom, ntyp in zip(argnames, types ) ) if types \
                       else dict( (a, None) for a in argnames )
 
-    print '@@ argname_to_type:', argname_to_type
-
     declarations = {}
     def symbol_lookup( s ):
         # returns: requires_declaration, type, string_representation
-        if s == idx_name or s == 'gid':
-            return False, None, 'gid'
+        if s in idx_names:
+            return False, None, idx_names[s]
 
         if s == results_name or s == 'res_g':
             return True, return_type, 'res_g'
@@ -413,7 +444,6 @@ def full_function_to_kernel( f, types, shape, bindings=None, return_type=None ):
     _, typ = conv(body, symbol_lookup=symbol_lookup, declarations=declarations)
 
     # res_g should appear in declarations, as we want to know its inferred type, but we don't actually want to declare it
-    print "@@ declarations:", declarations
     result_typ = declarations['res_g']
     del declarations['res_g']
 
@@ -424,34 +454,23 @@ def full_function_to_kernel( f, types, shape, bindings=None, return_type=None ):
     input_sig =  ', '.join(sigs)
     decl = '\n'.join( '%s %s;' % (typ, nom) for nom, typ in declarations.items())
 
-    kernel = """
+    kernel = headers + """
 
 __kernel void sum( %(sig)s ) {
+  %(getters)s
   %(decl)s
-  int gid = get_global_id(0);
   %(body)s
-}""" % {'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
+}""" % {'getters': id_getters, 'decl': decl, 'sig': input_sig, 'body': '\n  '.join(assignments)}
 
     # some platforms require this, and others complain ...
+    '''
     kernel = """
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 \n""" + kernel
-
+    '''
 
     if bindings is None:
         kernel = "/* NOTE: without numpy bindings, some types might be incorrectly annotated as None */" + kernel
 
     return (argnames, kernel, result_typ)
 
-
-
-"""
-
-x = Py2OpenCL( lambda x: x + 1 ).map( numpy.array(...) )
-
-# .bind used for type inference
-print Py2OpenCL( lambda x: x + 1 ).bind( numpy.array(...) ).kernel
-
-x = Py2OpenCL( lambda x: x + 1 ).bind( numpy.array(...) ).apply()
-
-"""

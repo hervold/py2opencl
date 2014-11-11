@@ -37,10 +37,6 @@ class Py2OpenCL(object):
         self.bindings = bindings
         self.lmb = lmb
 
-    @property
-    def kernel(self):
-        return lambda_to_kernel( self.lmb, None, bindings=self.bindings )[1]
-
     def bind(self, *arrays, **kw ):
         """
         verify types and number of numpy arrays, then compile kernel.
@@ -67,14 +63,14 @@ class Py2OpenCL(object):
             except AttributeError:
                 pass
 
-        self.argnames, self._kernel, cl_return_typ = function_to_kernel( self.lmb, self.types, self.shape,
-                                                                       bindings=self.bindings,
-                                                                       return_type=kw.get('return_type'))
+        self.argnames, self.kernel, cl_return_typ = function_to_kernel( self.lmb, self.types, self.shape,
+                                                                        bindings=self.bindings,
+                                                                        return_type=kw.get('return_type'))
         self.return_typ = cltyp_to_np[cl_return_typ]
         assert self.argnames and len(self.argnames) == len(self.arrays)
 
         # compile openCL
-        self.prog = cl.Program(self.ctx, self._kernel).build()
+        self.prog = cl.Program(self.ctx, self.kernel).build()
 
 
     def apply(self, *new_arrays):

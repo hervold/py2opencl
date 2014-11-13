@@ -63,9 +63,12 @@ class Py2OpenCL(object):
             except AttributeError:
                 pass
 
+        given_return_typ = nptyp_to_cl[ kw['return_type'] ] \
+                           if 'return_type' in kw else None
+
         self.argnames, self.kernel, cl_return_typ = function_to_kernel( self.lmb, self.types, self.shape,
                                                                         bindings=self.bindings,
-                                                                        return_type=kw.get('return_type'))
+                                                                        return_type=given_return_typ )
         self.return_typ = cltyp_to_np[cl_return_typ]
         assert self.argnames and len(self.argnames) == len(self.arrays)
 

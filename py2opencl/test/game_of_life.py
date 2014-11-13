@@ -44,7 +44,10 @@ grid = randint( 0, 2, size=(X, Y) ).astype(numpy.dtype('uint8'))
 show_iteration( grid, "Initial Random State")
 
 iterate = Py2OpenCL( next_it )
-iterate.bind( grid, return_type='uchar' )
+iterate.bind( grid, return_type=numpy.dtype('uint8') )
+
+print iterate.kernel
+
 
 for i in range(120):
 

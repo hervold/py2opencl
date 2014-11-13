@@ -11,7 +11,7 @@ __kernel void sum(__global const float *a_g, __global const float *b_g, __global
 """).build()
 ```
 
-**py2opencl** addresses this shortcoming by converting Python to C, at least for a limited set of Python.
+**py2opencl** addresses this shortcoming by converting Python to C, at least for a limited set of Python.  Where possible, I've tried to maintain compatibility with Numpy -- that is, one should be able to run ones function either in a for loop or using `py2opencl` and expect to see the same results.
 
 
 ## An Example: Conway's Game of Life in Pure Python
@@ -61,9 +61,11 @@ for i in range(100):
 The `Py2OpenCL` constructor takes a function (or lambda) as an argument.  This function is converted to a kernel in the subset of C defined by OpenCL.  However, C is a statically typed language, while Python is dynamically typed -- the Python abstract syntax tree (AST) has nothing to say about the types of `dest` or `src` in this example.   These types must be inferred from the arguments supplied, which happens when `.bind` is called.  In this example, that isn't enough, as 0 and 1 are of ambiguous type, so `py2opencl` doesn't know the return type of the `dest` array.  This is supplied via the `return_type` argument to `.bind`
 
 Note that any old function won't do; `py2opencl` expects function arguments to appear in a specific order:
+
 1. index(es)
 2. output/destination array
 3 input/source array(s)
+
 In the example above, the `src` array is 2-dimensional, so `py2opencl` expects two index arguments (`x` and `y`), and produces a 2D array as output.
 
 
@@ -113,3 +115,37 @@ __kernel void sum( __global const uchar *src, __global uchar *res_g ) {
 ```
 
 Note the `FLATTEN2` macro.  OpenCL only accepts flat arrays, but has support for multidimensional indexing via the `get_global_id` function; it's up to the user to convert those X and Y coordinates into a single offset.  `py2opencl` simplifies this by with the FLATTEN2 and FLATTEN3 macros.  It also handles wrap-around in order to prevent access to outside memory.
+
+
+## Support for Built-in OpenCL Math Functions.
+
+`py2opencl` provides support for built-in functions via the F module, as shown in this example:
+
+```python
+from py2opencl import Py2OpenCL, F
+import numpy as np
+
+a = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )).astype('int64') )
+```
+
+In python, `F.sin` is the same as `numpy.sin`, but `py2opencl` knows to convert it to OpenCL's native sin function.
+
+This example also illustrates the `.map` helper function, which is equivalent calling `.bind` and `.apply`
+
+
+## TODO
+
+By its nature, `py2opencl` won't ever support many parts of Python: no lists, tuples, or dictionaries.  No calling outside functions.
+
+I will likely add support for limited `for` and `while` loops.
+
+I'd also like to add support for `len`, eg:
+
+```python
+
+def next_it( i, dest, src ):
+    if i+1 >= len(src):
+      dest[i] = 10
+    else:
+      dest[i] = dest[i+1]
+```

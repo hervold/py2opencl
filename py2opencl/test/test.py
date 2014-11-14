@@ -80,7 +80,7 @@ def main():
         Image.fromarray( ocl_result.reshape(img_arr.shape), 'RGB').save('/tmp/oclfoo.png')
         Image.fromarray( py_result, 'RGB').save('/tmp/pyfoo.png')
 
-        #assert (ocl_result == py_result).all(), 'python and openCL computed different image averages: %s' % (ocl_result - py_result)
+        assert (ocl_result == py_result).all(), 'python and openCL computed different image averages: %s' % (ocl_result - py_result)
 
     arr = np.random.rand( int(1e4) ).astype('float32')
 

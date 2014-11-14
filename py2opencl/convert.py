@@ -102,7 +102,7 @@ def conv_subscr( el, symbol_lookup,  declarations ):
         return conv( sub, symbol_lookup,  declarations )
     elif name == 'Tuple':
         l = [conv( x, symbol_lookup,  declarations ) for x in sub.findall('./elts/_list_element')]
-        args = ','.join( a for a,_ in l )
+        args = ','.join( '('+a+')' for a,_ in l )
         if len(l) == 2:
             return 'FLATTEN2( %s )' % args, 'int'
         elif len(l) == 3:

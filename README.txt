@@ -60,8 +60,8 @@ OpenCL Drivers
 ==============
 
 Py2OpenCL should work out-of-the-box on Mac OS X.  If you're on Linux and don't have a fancy GPU,
-I'd suggest AMD's ICD, found `here http://developer.amd.com/tools-and-sdks/opencl-zone/opencl-tools-sdks/amd-accelerated-parallel-processing-app-sdk/`
-(as of 26 Jul 2014).  It supports modern Intel CPU's, no GPU required.  (Presumably it supports AMD CPUs as well.)
+I'd suggest AMD's ICD, found at http://developer.amd.com/tools-and-sdks/opencl-zone/amd-accelerated-parallel-processing-app-sdk/
+(as of 13 Nov 2014).  It supports modern Intel CPU's, no GPU required.  (Presumably it supports AMD CPUs as well.)
 
 As of this writing, Intel's beignet driver appears to be broken on Ubuntu 14.04.
 

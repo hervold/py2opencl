@@ -1,6 +1,6 @@
 # py2opencl: OpenCL without the C
 
-Andreas Klöckner's [pyopencl package](http://mathema.tician.de/software/pyopencl/) provides a complete set of OpenCL bindings for Python, but doesn't spare the user from writing their kernel in C, as [his example illustrates](http://documen.tician.de/pyopencl/):
+Andreas Klöckner's [pyopencl package](http://mathema.tician.de/software/pyopencl/) provides a very complete set of OpenCL bindings for Python, as well as a wide range of parallel algorithms.  But for those looking to experiment with OpenCL development, the core algorithm must still be written in C, as [Andreas' example illustrates](http://documen.tician.de/pyopencl/):
 
 ```
 prg = cl.Program(ctx, """
@@ -11,12 +11,17 @@ __kernel void sum(__global const float *a_g, __global const float *b_g, __global
 """).build()
 ```
 
-**py2opencl** addresses this shortcoming by converting Python to C, at least for a limited set of Python.  Where possible, I've tried to maintain compatibility with Numpy -- that is, one should be able to run ones function either in a for loop or using `py2opencl` and expect to see the same results.
+**py2opencl** tries to simlify this by converting Python to C for a limited set of Python.  Where possible, I maintain compatibility with Numpy -- you should be able to run the same function in a Python `for` loop or using `py2opencl` without modification, and expect to see the same results (at vastly different speeds, of course).
+
+
+## Before we begin
+
+OpenCL doesn't necessarily require a GPU, but it does require drivers.  OS X systems ship with drivers by default; on Linux, I'd recommend [AMD's "Accelerated Parallel Processing" SDK](http://developer.amd.com/tools-and-sdks/opencl-zone/amd-accelerated-parallel-processing-app-sdk/), which works on any modern x86 CPU without any need for a GPU.  I've also tested this code using Nvidia's `nvidia-opencl-icd-331` package on Ubuntu, paired with a GeForce GT 630M GPU.
 
 
 ## An Example: Conway's Game of Life in Pure Python
 
-The rules for the Game of Life cellular automaton are easily expressed in a few lines of Python.  In the following example, I define a `next_it` function to generate the next iteration of an array, then convert that function to an OpenCL kernel and calculate 100 iterations.
+The rules for the Game of Life cellular automaton are easily expressed in a few lines of Python.  In the following example, I define a `next_it` function to generate the next iteration of an array, then convert that function to an OpenCL kernel and calculate 1e6 iterations.
 
 ```python
 from py2opencl import Py2OpenCL
@@ -53,7 +58,7 @@ iterate.bind( grid, return_type = numpy.dtype('uint8') )
 
 print iterate.kernel
 
-for i in range(100):
+for i in range(int(1e6)):
     grid = iterate.apply( grid )
 
 ```
@@ -64,7 +69,7 @@ Note that any old function won't do; `py2opencl` expects function arguments to a
 
 1. index(es)
 2. output/destination array
-3 input/source array(s)
+3. input/source array(s)
 
 In the example above, the `src` array is 2-dimensional, so `py2opencl` expects two index arguments (`x` and `y`), and produces a 2D array as output.
 
@@ -114,7 +119,7 @@ __kernel void sum( __global const uchar *src, __global uchar *res_g ) {
   }
 ```
 
-Note the `FLATTEN2` macro.  OpenCL only accepts flat arrays, but has support for multidimensional indexing via the `get_global_id` function; it's up to the user to convert those X and Y coordinates into a single offset.  `py2opencl` simplifies this by with the FLATTEN2 and FLATTEN3 macros.  It also handles wrap-around in order to prevent access to outside memory.
+Note the `FLATTEN2` macro.  OpenCL only accepts flat arrays, but has support for multidimensional indexing via the `get_global_id` function; it's up to the user to convert those X and Y coordinates into a single offset.  `py2opencl` simplifies this with the FLATTEN2 and FLATTEN3 macros.  It also handles wrap-around in order to prevent access to outside memory.
 
 
 ## Support for Built-in OpenCL Math Functions.
@@ -128,9 +133,14 @@ import numpy as np
 a = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )).astype('int64') )
 ```
 
-In python, `F.sin` is the same as `numpy.sin`, but `py2opencl` knows to convert it to OpenCL's native sin function.
+To the Python interpreter, `F.sin` is the same as `numpy.sin`, but `py2opencl` knows to convert it to OpenCL's native sin function.
 
 This example also illustrates the `.map` helper function, which is equivalent calling `.bind` and `.apply`
+
+
+## Performance
+
+
 
 
 ## TODO

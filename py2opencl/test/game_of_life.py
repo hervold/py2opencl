@@ -10,9 +10,11 @@ def show_iteration( grid, title=None ):
     if title is not None:
         print '=' * 5, title, '=' * 5
 
+    grid = numpy.array(grid)
+
     x, y = grid.shape
     for j in range(y):
-        print ''.join(' ' if c == 0 else '*' for c in grid[:,j])
+        print ''.join('*' if c else ' ' for c in grid[:,j])
     print
 
 def next_it( x, y, dest, src ):
@@ -39,9 +41,9 @@ def next_it( x, y, dest, src ):
         dest[x,y] = 0
 
 # initialize first grid w/ random choice of 0,
-grid = randint( 0, 2, size=(X, Y) ).astype(numpy.dtype('uint8'))
+grid = SafeArray.wrap( randint( 0, 2, size=(X, Y) ).astype(numpy.dtype('uint8')) )
 
-show_iteration( grid, "Initial Random State")
+#show_iteration( grid, "Initial Random State")
 
 iterate = Py2OpenCL( next_it )
 iterate.bind( grid, return_type=numpy.dtype('uint8') )
@@ -49,7 +51,17 @@ iterate.bind( grid, return_type=numpy.dtype('uint8') )
 print iterate.kernel
 
 
-for i in range(120):
+for i in range(int(1e5)):
+    if not i % 10000:
+        show_iteration( grid, "Generation %d" % i )
+    grid = iterate.apply(grid)
+    '''
+    out = SafeArray.wrap(numpy.zeros( shape=grid.shape, dtype=grid.dtype))
+    for x in range(X):
+        for y in range(Y):
+            next_it( x, y, out, grid )
+    grid = out
+    del out
+    '''
 
-    grid = iterate.apply( grid )
-    show_iteration( grid, "Generation %d" % i )
+show_iteration( grid, "Generation %d" % i )

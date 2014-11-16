@@ -140,6 +140,18 @@ This example also illustrates the `.map` helper function, which is equivalent ca
 
 ## Performance
 
+1e5 iterations, pure python
+real	78m30.055s
+user	78m25.735s
+sys	0m0.156s
+
+amd cpu openCL
+
+real	0m14.849s
+user	0m19.959s
+sys	0m8.984s
+
+
 (TBD)
 
 

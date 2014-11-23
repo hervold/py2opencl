@@ -52,6 +52,7 @@ def verify_apply( func, argtypes ):
     for t in func.types:
         args, ret = t.split('->')
         assert len(argtypes) == len(args)
+
         for atyp, ch in zip(argtypes,args):
             if atyp is None:
                 continue
@@ -84,12 +85,12 @@ def special_funcs( modname, funcname, symbol_lookup, args ):
         mod = importlib.import_module('.'+modname, package='py2opencl')
     try:
         func = mod.__getattribute__(funcname)
-
-        # requires_declaration, type, string_representation
-        argtypes = [symbol_lookup(a)[1] for a,_ in args]
-        return funcname, verify_apply( func, argtypes )
     except AttributeError:
         return funcname, None
+    else:
+        # requires_declaration, type, string_representation
+        argtypes = [t or symbol_lookup(a)[1] for a,t in args]
+        return funcname, verify_apply( func, argtypes )
 
 
 def conv_subscr( el, symbol_lookup,  declarations ):

@@ -74,7 +74,7 @@ Note that any old function won't do; `py2opencl` expects function arguments to a
 In the example above, the `src` array is 2-dimensional, so `py2opencl` expects two index arguments (`x` and `y`), and produces a 2D array as output.
 
 
-## Auto-generated C Code
+## C Code Generated
 The example above is converted to this C kernel:
 
 ```C
@@ -142,7 +142,7 @@ This example also illustrates the `.map` helper function, which is equivalent ca
 
 ![Performance comparison: i7 vs Nvidia GPU](https://github.com/hervold/py2opencl/blob/master/docs/opencl_times.png)
 
-The above graph compares the run-times of a [simple test-script](https://github.com/hervold/py2opencl/blob/master/py2opencl/test/timing.py) running on my laptop's GeForce GT 630M GPU (96 shaders) vs. a quad-core Intel i7 CPU using AMD's OpenCL driver.
+The above graph compares the run-times of a [simple test-script](https://github.com/hervold/py2opencl/blob/master/py2opencl/test/timing.py) running on my laptop's GeForce GT 630M GPU (96 shaders) vs. its quad-core Intel i7 CPU using AMD's OpenCL driver.
 
 
 ## TODO

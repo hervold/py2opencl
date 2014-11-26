@@ -140,19 +140,9 @@ This example also illustrates the `.map` helper function, which is equivalent ca
 
 ## Performance
 
-1e5 iterations, pure python
-real	78m30.055s
-user	78m25.735s
-sys	0m0.156s
+![Performance comparison: i7 vs Nvidia GPU](https://github.com/hervold/py2opencl/blob/master/docs/opencl_times.png)
 
-amd cpu openCL
-
-real	0m14.849s
-user	0m19.959s
-sys	0m8.984s
-
-
-(TBD)
+The above graph compares the run-times of a [simple test-script](https://github.com/hervold/py2opencl/blob/master/py2opencl/test/timing.py) running on my laptop's GeForce GT 630M GPU (96 shaders) vs. a quad-core Intel i7 CPU using AMD's OpenCL driver.
 
 
 ## TODO

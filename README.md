@@ -130,7 +130,7 @@ Note the `FLATTEN2` macro.  OpenCL only accepts flat arrays, but has support for
 from py2opencl import Py2OpenCL, F
 import numpy as np
 
-a = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )).astype('int64') )
+a = Py2OpenCL( lambda x: F.sin( x ) ).map( (100 * np.random.rand( int(1e3) )) )
 ```
 
 To the Python interpreter, `F.sin` is the same as `numpy.sin`, but `py2opencl` knows to convert it to OpenCL's native sin function.
